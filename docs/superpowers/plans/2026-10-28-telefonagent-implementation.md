@@ -77,7 +77,7 @@ node_modules/
 TZ=Europe/Berlin
 SHOP_BASE_URL=https://shop.example
 SHOP_SITEMAP_URL=https://shop.example/sitemap.xml
-SHOP_PRODUCT_PATTERN=/(produkt|product|p)/
+SHOP_PRODUCT_PATTERN='/(produkt|product|p)/'
 SHOP_INFO_PATHS=/versand,/rueckgabe,/zahlung,/kontakt,/impressum,/oeffnungszeiten
 SHOP_NAME=Beispielshop
 SHOP_URL=https://shop.example
@@ -150,6 +150,8 @@ Eingehender Telefonagent für den eigenen Shop. n8n + Firecrawl crawlen die
 - [ ] **Step 5: Git initialisieren und prüfen**
 
 ```bash
+# Falls das Repo bereits initialisiert ist, `git init` überspringen und auf
+# dem aktuellen Feature-Branch committen. `.superpowers/` ist bereits ignoriert.
 git init -b main
 git add .gitignore .env.example README.md docs
 git commit -m "chore: scaffold shopagent project"
@@ -975,6 +977,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/common.sh
 source "$ROOT/install/lib/common.sh"
 
+# Werte aus .env für die Rollen-Installer (DB_*, N8N_*, FIRECRAWL_*, ...).
+if [[ -f "$ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/.env"
+  set +a
+fi
+
 ROLE="all"; DRY_RUN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -1037,9 +1047,10 @@ Erwartet: `API URL`, `DB URL`, `Studio URL` werden ausgegeben, Status „running
 
 - [ ] **Step 8: Rolle und n8n-Datenbank anlegen**
 
-Auf dem Host, mit gesetztem `DB_PASSWORD`:
+Auf dem Host, mit gesetztem `DB_PASSWORD` und `DB_ADMIN_PASSWORD`:
 
 ```bash
+set -a; source .env; set +a
 DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
 DB_IP="$(pct exec "$DB_CT" -- ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1)"
 pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -v pw='$DB_PASSWORD' -c \"create role shopagent login password :'pw';\"" || true
@@ -1194,7 +1205,7 @@ install_n8n() {
 
 ```bash
 bash -n install/lib/n8n.sh
-cp .env.example .env && chmod 600 .env
+if [[ ! -f .env ]]; then cp .env.example .env; chmod 600 .env; fi
 docker compose -f docker/n8n/docker-compose.yml --env-file .env config >/dev/null
 ```
 
@@ -1279,8 +1290,8 @@ Wants=network-online.target docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/shopagent-crawler
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose stop
+ExecStart=/usr/bin/docker compose -f firecrawl/docker-compose.yaml -f docker-compose.override.yml up -d
+ExecStop=/usr/bin/docker compose -f firecrawl/docker-compose.yaml -f docker-compose.override.yml stop
 TimeoutStartSec=600
 
 [Install]
@@ -1309,7 +1320,8 @@ Description=Stop ShopAgent crawler after nightly run
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/docker compose -f /opt/shopagent-crawler/docker-compose.yml -f /opt/shopagent-crawler/docker-compose.override.yml stop
+WorkingDirectory=/opt/shopagent-crawler
+ExecStart=/usr/bin/docker compose -f firecrawl/docker-compose.yaml -f docker-compose.override.yml stop
 ```
 
 `systemd/shopagent-crawler-stop.timer`:
@@ -1644,6 +1656,9 @@ on conflict (url) do update set
 - [ ] **Step 5: Workflow bauen (n8n UI, Node für Node)**
 
 Workflow `ShopAgent Crawl`, Execution Order `v1`, inactive lassen bis getestet.
+Ohne n8n-UI: `n8n/workflows/01-crawl.json` direkt als gültige n8n-Importdatei
+(`nodes`, `connections`, `settings`) schreiben; Import und Testlauf sind
+Live-Checkpoints auf der n8n-Instanz.
 
 0. **Postgres-Credential** „ShopAgent DB“ anlegen: Host `DB_HOST`, Port `DB_PORT`, DB `DB_NAME`, User `DB_USER`, Passwort `DB_PASSWORD`, SSL aus.
 1. **Schedule Trigger** – Cron `0 3 * * *`.
@@ -1825,6 +1840,9 @@ echo "API-CONTRACT OK"
 - [ ] **Step 2: Workflow bauen**
 
 Workflow `ShopAgent API`, inactive.
+Ohne n8n-UI: `n8n/workflows/02-agent-api.json` direkt als gültige
+n8n-Importdatei (`nodes`, `connections`, `settings`) schreiben; Import,
+Aktivierung und Contract-Test sind Live-Checkpoints.
 
 1. **Webhook** – Method `POST`, Path `shopagent/:action`, Response Mode `Response Node`, Authentication `None`.
 2. **IF** „Auth ok?“ – Bedingung: `{{ $json.headers.authorization }}` equals
@@ -1906,6 +1924,7 @@ return [{ json: row }];
 export AGENT_WEBHOOK_SECRET="$(grep '^AGENT_WEBHOOK_SECRET=' .env | cut -d= -f2-)"
 DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
 pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c \"insert into pages (url,title,content_md,topic,content_hash) values ('https://shop.example/oeffnungszeiten','Öffnungszeiten','Mo-Fr 9-18 Uhr','oeffnungszeiten','seed') on conflict (url) do update set content_md=excluded.content_md;\""
+pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c \"insert into products (sku,name,price_cents,currency,availability,product_url,source_hash) values ('REGEN-42','Regenschuh Urban 42 schwarz',8990,'EUR','instock','https://shop.example/produkt/regenschuh-urban-42-schwarz','seed') on conflict (sku) do update set name=excluded.name, price_cents=excluded.price_cents, availability=excluded.availability;\""
 tests/api-contract.sh
 ```
 
@@ -2074,10 +2093,12 @@ jederzeit, wenn Sie mit einem Menschen sprechen möchten."
     "type": "webhook",
     "name": "search_products",
     "description": "Sucht Produkte im Shop. Nutze dieses Tool bei Fragen nach Produkten, Preisen, Kategorien oder Verfügbarkeit.",
-    "webhook": {
+    "response_timeout_secs": 10,
+    "pre_tool_speech": "force",
+    "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/search",
       "method": "POST",
-      "headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
       "request_body_schema": {
         "type": "object",
         "properties": {
@@ -2087,8 +2108,7 @@ jederzeit, wenn Sie mit einem Menschen sprechen möchten."
           "in_stock_only": { "type": "boolean", "description": "Optional: nur verfügbare Produkte" }
         },
         "required": ["query"]
-      },
-      "response_timeout_secs": 10
+      }
     }
   }
 }
@@ -2102,18 +2122,18 @@ jederzeit, wenn Sie mit einem Menschen sprechen möchten."
     "type": "webhook",
     "name": "get_product",
     "description": "Liefert Details zu genau einem Produkt. Nutze es, wenn der Anrufer einen konkreten Produktnamen oder eine SKU nennt.",
-    "webhook": {
+    "response_timeout_secs": 10,
+    "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/product",
       "method": "POST",
-      "headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
       "request_body_schema": {
         "type": "object",
         "properties": {
           "sku": { "type": "string", "description": "Produkt-SKU, falls bekannt" },
           "name": { "type": "string", "description": "Produktname, falls keine SKU" }
         }
-      },
-      "response_timeout_secs": 10
+      }
     }
   }
 }
@@ -2127,10 +2147,11 @@ jederzeit, wenn Sie mit einem Menschen sprechen möchten."
     "type": "webhook",
     "name": "get_shop_info",
     "description": "Liefert Shop-Informationen zu Öffnungszeiten, Versand, Lieferzeit, Rückgabe, Zahlung oder Kontakt.",
-    "webhook": {
+    "response_timeout_secs": 10,
+    "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/info",
       "method": "POST",
-      "headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
       "request_body_schema": {
         "type": "object",
         "properties": {
@@ -2140,8 +2161,7 @@ jederzeit, wenn Sie mit einem Menschen sprechen möchten."
           }
         },
         "required": ["topic"]
-      },
-      "response_timeout_secs": 10
+      }
     }
   }
 }
@@ -2155,10 +2175,11 @@ jederzeit, wenn Sie mit einem Menschen sprechen möchten."
     "type": "webhook",
     "name": "create_callback",
     "description": "Notiert einen Rückrufwunsch mit Name, Telefonnummer und Grund.",
-    "webhook": {
+    "response_timeout_secs": 10,
+    "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/callback",
       "method": "POST",
-      "headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
       "request_body_schema": {
         "type": "object",
         "properties": {
@@ -2167,8 +2188,7 @@ jederzeit, wenn Sie mit einem Menschen sprechen möchten."
           "reason": { "type": "string" }
         },
         "required": ["phone", "reason"]
-      },
-      "response_timeout_secs": 10
+      }
     }
   }
 }
@@ -2182,18 +2202,18 @@ jederzeit, wenn Sie mit einem Menschen sprechen möchten."
     "type": "webhook",
     "name": "handoff_to_human",
     "description": "Protokolliert die Übergabe an einen Menschen. Die eigentliche Weiterleitung macht das native Transfer-Tool.",
-    "webhook": {
+    "response_timeout_secs": 10,
+    "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/handoff",
       "method": "POST",
-      "headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
       "request_body_schema": {
         "type": "object",
         "properties": {
           "reason": { "type": "string", "enum": ["beschwerde", "reklamation", "beratung", "sonstiges"] }
         },
         "required": ["reason"]
-      },
-      "response_timeout_secs": 10
+      }
     }
   }
 }
@@ -2323,10 +2343,13 @@ function buildAgentPayload(agent, prompt) {
 
 function buildToolPayload(tool, { tunnelHost, secret }) {
   const clone = structuredClone(tool);
-  const webhook = clone.tool_config?.webhook;
-  if (!webhook) throw new Error(`Tool ohne webhook: ${clone.tool_config?.name ?? clone.name}`);
-  webhook.url = webhook.url.replace('TUNNEL_HOST', tunnelHost);
-  webhook.headers = { ...(webhook.headers || {}), Authorization: `Bearer ${secret}` };
+  const schema = clone.tool_config?.api_schema;
+  if (!schema) throw new Error(`Tool ohne api_schema: ${clone.tool_config?.name ?? clone.name}`);
+  schema.url = schema.url.replace('TUNNEL_HOST', tunnelHost);
+  schema.request_headers = {
+    ...(schema.request_headers || {}),
+    Authorization: `Bearer ${secret}`
+  };
   return clone;
 }
 
@@ -2344,6 +2367,17 @@ async function api(pathname, options = {}) {
 }
 
 async function main() {
+  const required = {
+    TUNNEL_HOST: process.env.TUNNEL_HOST,
+    AGENT_WEBHOOK_SECRET: process.env.AGENT_WEBHOOK_SECRET,
+    ELEVENLABS_VOICE_ID: process.env.ELEVENLABS_VOICE_ID,
+    HUMAN_TRANSFER_NUMBER: process.env.HUMAN_TRANSFER_NUMBER
+  };
+  const unusable = Object.entries(required)
+    .filter(([, value]) => !value || value.includes('CHANGE_ME') || value === '+49...')
+    .map(([name]) => name);
+  if (unusable.length) throw new Error(`Platzhalter in .env ausfüllen: ${unusable.join(', ')}`);
+
   const prompt = fs.readFileSync(path.join(ROOT, 'elevenlabs', 'prompt.md'), 'utf8');
   const agent = JSON.parse(fs.readFileSync(path.join(ROOT, 'elevenlabs', 'agent.json'), 'utf8'));
   const toolFiles = fs.readdirSync(path.join(ROOT, 'elevenlabs', 'tools')).filter((f) => f.endsWith('.json'));
@@ -2400,17 +2434,17 @@ test('buildToolPayload ersetzt Tunnel und Secret', () => {
     tool_config: {
       type: 'webhook',
       name: 'search_products',
-      webhook: {
+      api_schema: {
         url: 'https://TUNNEL_HOST/webhook/shopagent/search',
         method: 'POST',
-        headers: { Authorization: 'Bearer AGENT_WEBHOOK_SECRET' }
+        request_headers: { Authorization: 'Bearer AGENT_WEBHOOK_SECRET' }
       }
     }
   };
   const out = buildToolPayload(tool, { tunnelHost: 'agent.example.de', secret: 'abc123' });
-  assert.equal(out.tool_config.webhook.url, 'https://agent.example.de/webhook/shopagent/search');
-  assert.equal(out.tool_config.webhook.headers.Authorization, 'Bearer abc123');
-  assert.equal(tool.tool_config.webhook.url, 'https://TUNNEL_HOST/webhook/shopagent/search');
+  assert.equal(out.tool_config.api_schema.url, 'https://agent.example.de/webhook/shopagent/search');
+  assert.equal(out.tool_config.api_schema.request_headers.Authorization, 'Bearer abc123');
+  assert.equal(tool.tool_config.api_schema.url, 'https://TUNNEL_HOST/webhook/shopagent/search');
 });
 
 test('buildAgentPayload ersetzt Variablen und Transfer-Nummer', () => {
@@ -2811,7 +2845,7 @@ temporären Simulationstest an, startet alle Tests zusammen und pollt den
 Lauf, bis jeder Test `passed`, `failed` oder `cancelled` ist.
 
 Ergebnis: `eval-report.json` mit `id`, `status`, `ok`, `rationale`.
-Exit-Code 0 nur bei 7/7. Bei Fehlschlägen die `rationale` lesen,
+Exit-Code 0 nur, wenn alle Fälle bestehen. Bei Fehlschlägen die `rationale` lesen,
 Prompt/Tools korrigieren, Task 11 erneut anwenden und das Skript erneut
 starten.
 ````
@@ -2988,6 +3022,16 @@ FRESH="$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER
   "select coalesce(max(last_seen_at) > now() - interval '36 hours', false) from products;")"
 [[ "$FRESH" == "t" ]] || note "produktdaten älter als 36h"
 
+STATE_DIR="${STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/shopagent}"
+mkdir -p "$STATE_DIR"
+COUNT="$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc \
+  "select count(*) from products where is_active;" 2>/dev/null || true)"
+PREV="$(cat "$STATE_DIR/product-count" 2>/dev/null || true)"
+if [[ "$PREV" =~ ^[0-9]+$ && "$COUNT" =~ ^[0-9]+$ && "$PREV" -gt 0 && "$COUNT" -lt $((PREV * 80 / 100)) ]]; then
+  note "produktzahl sinkt ($PREV -> $COUNT)"
+fi
+[[ "$COUNT" =~ ^[0-9]+$ ]] && echo "$COUNT" > "$STATE_DIR/product-count"
+
 CODE="$(curl -s -o /dev/null -w '%{http_code}' "https://$TUNNEL_HOST/webhook/shopagent/search" \
   -X POST -H 'Content-Type: application/json' -d '{}')"
 [[ "$CODE" == "401" ]] || note "tunnel/auth (HTTP $CODE)"
@@ -3001,7 +3045,7 @@ echo "HEALTH OK"
 
 - [ ] **Step 2: Fehlerworkflow bauen**
 
-Workflow `ShopAgent Error Alert`: Error Trigger → HTTP Request `POST {{$env.NTFY_URL}}` mit Body `ShopAgent Fehler: {{$json.execution.error.message}}`. Export nach `n8n/workflows/03-error-alert.json`, aktivieren.
+Workflow `ShopAgent Error Alert`: Error Trigger → HTTP Request `POST {{$env.NTFY_URL}}` mit Body `ShopAgent Fehler: {{$json.execution.error.message}}`. `n8n/workflows/03-error-alert.json` als gültige n8n-Importdatei schreiben; Import und Aktivierung sind Live-Checkpoints.
 
 - [ ] **Step 3: Alarm testen**
 
@@ -3046,7 +3090,7 @@ git commit -m "feat(ops): add healthcheck alerting and operations runbook"
 
 - [ ] Crawl: ≥95 % der Sitemap-URLs, 0 doppelte SKUs, 2. Lauf ohne Duplikate, <30 min
 - [ ] Suche: p95 <300 ms, ≥80 % Top-1 bei 20 Goldfragen
-- [ ] Agent: 7/7 Eval-Fälle, KI-Offenlegung hörbar, keine erfundenen Preise
+- [ ] Agent: alle Eval-Fälle grün (7 Basis + 20 Goldfragen), KI-Offenlegung hörbar, keine erfundenen Preise
 - [ ] Telefonie: 5 echte Anrufe, Übergabe an Menschen funktioniert
 - [ ] Sicherheit: Webhook ohne Secret 401, Supabase/n8n-UI/Firecrawl nicht öffentlich
 - [ ] Backup: Restore getestet, Alarm getestet
@@ -3056,7 +3100,10 @@ git commit -m "feat(ops): add healthcheck alerting and operations runbook"
 
 - [ ] **Step 2: Goldfragen-Set anlegen und messen**
 
-20 reale Kundenfragen in `tests/eval-cases.json` ergänzen, `node scripts/eval-agent.mjs` und `tests/api-contract.sh` laufen lassen, Ergebnis in `eval-report.json` archivieren.
+20 reale Kundenfragen in `tests/eval-cases.json` im selben Format wie Task 13
+(`{id, scenario, success}`) ergänzen, `node scripts/eval-agent.mjs` und
+`tests/api-contract.sh` laufen lassen, Ergebnis in `eval-report.json` archivieren.
+Erwartet: 27/27 Fälle bestanden.
 
 - [ ] **Step 3: Abschluss-Commit**
 
