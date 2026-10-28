@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+*.dump
+*.log
+eval-report.json
+node_modules/
+.DS_Store
