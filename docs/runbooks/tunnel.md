@@ -52,19 +52,15 @@ n8n unbeabsichtigt öffentlich.
 ## 2. Tunnel anlegen (einmalig, auf dem Admin-Rechner)
 
 ```bash
+set -a; source .env; set +a
+: "${TUNNEL_HOST:?TUNNEL_HOST fehlt in .env}"
 cloudflared tunnel login
 cloudflared tunnel create shopagent
 cloudflared tunnel route dns shopagent "$TUNNEL_HOST"
 ```
 
-Vorher `TUNNEL_HOST` in der Shell setzen (aus `.env`), damit der CNAME auf den
-richtigen Namen zeigt:
-
-```bash
-set -a; source .env; set +a
-: "${TUNNEL_HOST:?TUNNEL_HOST fehlt in .env}"
-cloudflared tunnel route dns shopagent "$TUNNEL_HOST"
-```
+`TUNNEL_HOST` muss aus `.env` gesetzt sein, damit der CNAME auf den richtigen
+Namen zeigt.
 
 Erwartet:
 
