@@ -8,6 +8,6 @@ mkdir -p "$OUT"
 export PGPASSWORD="$DB_ADMIN_PASSWORD"
 pg_dump -h 127.0.0.1 -p "$DB_PORT" -U "$DB_ADMIN_USER" -d postgres -Fc -f "$OUT/postgres.dump"
 pg_dump -h 127.0.0.1 -p "$DB_PORT" -U "$DB_ADMIN_USER" -d n8n -Fc -f "$OUT/n8n.dump"
-sha256sum "$OUT"/*.dump > "$OUT/SHA256SUMS"
+(cd "$OUT" && sha256sum *.dump > SHA256SUMS)
 find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -mtime "+${BACKUP_RETAIN_DAYS}" -exec rm -rf {} +
 echo "Backup: $OUT"

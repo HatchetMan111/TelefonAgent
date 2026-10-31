@@ -16,6 +16,11 @@ case "$SCRATCH" in
     ;;
 esac
 
+if [[ ! -f "$DUMP" ]]; then
+  echo "Dump nicht gefunden: $DUMP" >&2
+  exit 1
+fi
+
 DIR="$(cd "$(dirname "$DUMP")" && pwd)"
 BASE="$(basename "$DUMP")"
 if [[ -f "$DIR/SHA256SUMS" ]]; then
