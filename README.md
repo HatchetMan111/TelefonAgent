@@ -10,10 +10,10 @@ Voraussetzungen auf dem Proxmox-Host:
 
 - Proxmox VE 8/9, root-Zugang, `vmbr0`, Storage `local-lvm` (oder `--storage`)
 - Internetzugang für Debian-Cloud-Image, Docker und GitHub
-- Das Repo ist öffentlich; ersetze `USER` in der URL
+- Das Repo ist öffentlich
 
 ```bash
-bash -c "$(wget -qLO - https://raw.githubusercontent.com/USER/telefonagent/main/install/telefonagent.sh)"
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/TelefonAgent/main/install/telefonagent.sh)"
 ```
 
 Der Installer fragt Shop-Name, Shop-URL, Tunnel-Host und optional ElevenLabs/SIP

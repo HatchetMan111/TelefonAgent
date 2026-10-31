@@ -5,12 +5,12 @@
 - Proxmox VE 8/9, root auf dem Host
 - Bridge `vmbr0`, Storage `local-lvm` (oder per `--storage`/`--bridge`)
 - Internet für Debian-Cloud-Image, Docker Hub, GitHub und Firecrawl
-- Öffentliches Repo; `USER` im Einzeiler ersetzen
+- Öffentliches Repo `HatchetMan111/TelefonAgent`
 
 ## Installation
 
 ```bash
-bash -c "$(wget -qLO - https://raw.githubusercontent.com/USER/telefonagent/main/install/telefonagent.sh)"
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/TelefonAgent/main/install/telefonagent.sh)"
 ```
 
 Der Installer:

@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 ROOT="${ROOT:-/opt/telefonagent}"
 ENV_SRC="${ENV_SRC:-/tmp/telefonagent.env}"
-REPO_URL="${REPO_URL:-https://github.com/USER/telefonagent.git}"
+REPO_URL="${REPO_URL:-https://github.com/HatchetMan111/TelefonAgent.git}"
 FIRECRAWL_REF="${FIRECRAWL_REF:-main}"
 
 log() { printf '[setup] %s\n' "$*"; }
