@@ -1,0 +1,17 @@
+[Unit]
+Description=Telefonagent Docker stack
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/telefonagent
+ExecStart=/opt/telefonagent/vm/run.sh
+ExecStop=/opt/telefonagent/vm/stop.sh
+Restart=always
+RestartSec=10
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: telefonagent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: postgres
+      TZ: ${TZ}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init/00-n8n-db.sql:/docker-entrypoint-initdb.d/00-n8n-db.sql:ro
+      - ../supabase/migrations/20261028000100_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../supabase/migrations/20261028000200_search_products.sql:/docker-entrypoint-initdb.d/02-search.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - default
+
+  n8n:
+    image: ${N8N_IMAGE:-n8nio/n8n:latest}
+    container_name: telefonagent-n8n
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5678:5678"
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n}
+      DB_POSTGRESDB_USER: ${DB_USER}
+      DB_POSTGRESDB_PASSWORD: ${DB_PASSWORD}
+      DB_POSTGRESDB_SCHEMA: public
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_SECURE_COOKIE: "false"
+      N8N_PROXY_HOPS: "1"
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      GENERIC_TIMEZONE: ${TZ}
+      TZ: ${TZ}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_RUNNERS_ENABLED: "true"
+      AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET}
+      SHOP_BASE_URL: ${SHOP_BASE_URL}
+      SHOP_SITEMAP_URL: ${SHOP_SITEMAP_URL}
+      SHOP_PRODUCT_PATTERN: ${SHOP_PRODUCT_PATTERN}
+      SHOP_INFO_PATHS: ${SHOP_INFO_PATHS}
+      FIRECRAWL_URL: http://api:3002
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+      NTFY_URL: ${NTFY_URL}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+  n8n_data:
+
+networks:
+  default:
+    name: telefonagent
+    external: true

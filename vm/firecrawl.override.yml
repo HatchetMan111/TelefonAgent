@@ -1,0 +1,20 @@
+services:
+  api:
+    ports:
+      - "127.0.0.1:3002:3002"
+    environment:
+      PORT: 3002
+      HOST: 0.0.0.0
+      USE_DB_AUTHENTICATION: "false"
+      MAX_RAM: "0.8"
+  worker:
+    environment:
+      USE_DB_AUTHENTICATION: "false"
+      NUM_WORKERS_PER_QUEUE: "2"
+  playwright-service:
+    shm_size: "1gb"
+
+networks:
+  default:
+    name: telefonagent
+    external: true
