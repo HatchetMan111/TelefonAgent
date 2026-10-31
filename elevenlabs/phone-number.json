@@ -1,0 +1,10 @@
+{
+  "provider": "sip_trunk",
+  "phone_number": "+49...",
+  "label": "ShopAgent",
+  "agent_id": "AGENT_ID",
+  "inbound_trunk_config": {
+    "allowed_addresses": ["PROVIDER_IP"],
+    "media_encryption": "required"
+  }
+}
