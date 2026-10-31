@@ -1,0 +1,42 @@
+services:
+  n8n:
+    image: ${N8N_IMAGE}
+    container_name: shopagent-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: ${DB_HOST}
+      DB_POSTGRESDB_PORT: ${DB_PORT}
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME}
+      DB_POSTGRESDB_USER: ${DB_USER}
+      DB_POSTGRESDB_PASSWORD: ${DB_PASSWORD}
+      DB_POSTGRESDB_SCHEMA: public
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_HOST: ${N8N_HOST}
+      N8N_PROTOCOL: http
+      N8N_SECURE_COOKIE: "false"
+      N8N_PROXY_HOPS: "1"
+      WEBHOOK_URL: https://${TUNNEL_HOST}/
+      GENERIC_TIMEZONE: ${TZ}
+      TZ: ${TZ}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      AGENT_WEBHOOK_SECRET: ${AGENT_WEBHOOK_SECRET}
+      SHOP_BASE_URL: ${SHOP_BASE_URL}
+      SHOP_SITEMAP_URL: ${SHOP_SITEMAP_URL}
+      SHOP_PRODUCT_PATTERN: ${SHOP_PRODUCT_PATTERN}
+      SHOP_INFO_PATHS: ${SHOP_INFO_PATHS}
+      FIRECRAWL_URL: http://${FIRECRAWL_HOST}:${FIRECRAWL_PORT}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./scripts:/opt/shopagent/scripts:ro
+      - ./n8n/code:/opt/shopagent/n8n/code:ro
+
+volumes:
+  n8n_data:

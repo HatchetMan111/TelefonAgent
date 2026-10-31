@@ -1,0 +1,16 @@
+[Unit]
+Description=ShopAgent Cloudflare Tunnel
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/shopagent/.env
+ExecStart=/usr/bin/docker run --rm --name shopagent-cloudflared --network host \
+  -v /etc/cloudflared:/etc/cloudflared:ro \
+  ${CLOUDFLARED_IMAGE} tunnel --config /etc/cloudflared/config.yml run
+ExecStop=/usr/bin/docker stop shopagent-cloudflared
+
+[Install]
+WantedBy=multi-user.target
