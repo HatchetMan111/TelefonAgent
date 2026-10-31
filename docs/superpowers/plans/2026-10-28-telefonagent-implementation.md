@@ -1998,6 +1998,9 @@ Erwartet: `~/.cloudflared/<TUNNEL_ID>.json` und DNS-CNAME.
 - [ ] **Step 3: Credentials und Config in den n8n-LXC bringen**
 
 ```bash
+set -a; source .env; set +a
+: "${TUNNEL_ID:?TUNNEL_ID fehlt in .env}"
+: "${TUNNEL_HOST:?TUNNEL_HOST fehlt in .env}"
 N8N_CT="$(pct list | awk '/shopagent-n8n/{print $1}')"
 pct exec "$N8N_CT" -- mkdir -p /etc/cloudflared
 pct push "$N8N_CT" ~/.cloudflared/"$TUNNEL_ID".json /etc/cloudflared/credentials.json
@@ -2019,6 +2022,9 @@ pct exec "$N8N_CT" -- systemctl restart shopagent-cloudflared.service
 - [ ] **Step 5: Test von außen**
 
 ```bash
+set -a; source .env; set +a
+: "${TUNNEL_HOST:?TUNNEL_HOST fehlt in .env}"
+: "${AGENT_WEBHOOK_SECRET:?AGENT_WEBHOOK_SECRET fehlt in .env}"
 # ohne Secret -> 401
 curl -s -o /dev/null -w '%{http_code}\n' -X POST "https://$TUNNEL_HOST/webhook/shopagent/search" \
   -H 'Content-Type: application/json' -d '{"query":"x"}'
