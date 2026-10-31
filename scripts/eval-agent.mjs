@@ -73,16 +73,33 @@ async function runTests(testIds) {
 }
 
 const TERMINAL_STATUSES = new Set(['passed', 'failed', 'cancelled']);
+const REPORT = path.join(ROOT, 'eval-report.json');
+const POLL_LIMIT = Math.max(60, cases.length * 6);
 
-async function waitFor(runId, expected) {
-  for (let i = 0; i < 60; i++) {
+function buildResults(tests, runs) {
+  const byTest = new Map(runs.map((r) => [r.test_id, r]));
+  return tests.map(({ id, testId }) => {
+    const run = byTest.get(testId) ?? {};
+    return {
+      id,
+      status: run.status ?? 'missing',
+      ok: run.status === 'passed',
+      rationale: run.condition_result?.rationale?.summary ?? ''
+    };
+  });
+}
+
+async function waitFor(runId, tests) {
+  let results = [];
+  for (let i = 0; i < POLL_LIMIT; i++) {
     const run = await call(`${API}/test-invocations/${runId}`);
-    const results = run.test_runs ?? [];
-    if (results.length >= expected && results.every((r) => TERMINAL_STATUSES.has(r.status))) {
+    results = run.test_runs ?? [];
+    if (results.length >= tests.length && results.every((r) => TERMINAL_STATUSES.has(r.status))) {
       return results;
     }
-    if (i < 59) await new Promise((resolve) => setTimeout(resolve, 10000));
+    if (i < POLL_LIMIT - 1) await new Promise((resolve) => setTimeout(resolve, 10000));
   }
+  fs.writeFileSync(REPORT, JSON.stringify(buildResults(tests, results), null, 2));
   throw new Error('Timeout beim Warten auf den Testlauf');
 }
 
@@ -102,20 +119,10 @@ try {
   for (const c of cases) tests.push({ id: c.id, testId: await createTest(c) });
 
   const invocation = await runTests(tests.map((t) => t.testId));
-  const runs = await waitFor(invocation.id, tests.length);
-  const byTest = new Map(runs.map((r) => [r.test_id, r]));
+  const runs = await waitFor(invocation.id, tests);
+  const results = buildResults(tests, runs);
 
-  const results = tests.map(({ id, testId }) => {
-    const run = byTest.get(testId) ?? {};
-    return {
-      id,
-      status: run.status ?? 'missing',
-      ok: run.status === 'passed',
-      rationale: run.condition_result?.rationale?.summary ?? ''
-    };
-  });
-
-  fs.writeFileSync(path.join(ROOT, 'eval-report.json'), JSON.stringify(results, null, 2));
+  fs.writeFileSync(REPORT, JSON.stringify(results, null, 2));
   const passed = results.filter((r) => r.ok).length;
   console.log(`${passed}/${results.length} bestanden`);
   process.exitCode = passed === results.length ? 0 : 1;

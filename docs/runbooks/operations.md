@@ -33,16 +33,18 @@ Kostenprüfung. Die Detail-Runbooks bleiben maßgeblich:
    **nur im Crawl-Fenster 02:50 bis 04:00**. Außerhalb dieses Fensters wird
    der Check übersprungen, weil der Crawler-Stack planmäßig gestoppt ist.
 4. Produktdaten nicht älter als 36 Stunden (`max(last_seen_at)`).
-5. Aktive Produktzahl nicht unter 80 % des letzten bekannten Werts
+5. Letzter Crawl-Lauf in `crawl_runs`: Status ungleich `success` alarmiert mit
+   Fehlerzahl. Gibt es noch keinen Lauf, wird nicht alarmiert.
+6. Aktive Produktzahl nicht unter 80 % des letzten bekannten Werts
    (Zustand in `${XDG_STATE_HOME:-$HOME/.local/state}/shopagent/product-count`,
    überschreibbar mit `STATE_DIR`).
-6. Tunnel und Auth-Pfad: `POST https://$TUNNEL_HOST/webhook/shopagent/search`
+7. Tunnel und Auth-Pfad: `POST https://$TUNNEL_HOST/webhook/shopagent/search`
    ohne Secret muss `401` liefern.
 
 Jeder Fehler setzt `FAIL=1`, wird als `FAIL: ...` auf stderr gemeldet und am
 Ende per `POST` an `NTFY_URL` alarmiert. Exit-Code `0` nur bei `HEALTH OK`,
-sonst `1`. Ein fehlgeschlagener Produktdaten-Query ist nicht fatal: Das
-Skript notiert den Fehler und prüft Produktzahl, Tunnel und Alarm weiter.
+sonst `1`. Fehlgeschlagene Produktdaten- und Crawl-Abfragen sind nicht fatal:
+Das Skript notiert den Fehler und prüft Produktzahl, Tunnel und Alarm weiter.
 
 Aufruf:
 
@@ -50,11 +52,16 @@ Aufruf:
 ./scripts/healthcheck.sh; echo "exit=$?"
 ```
 
-Das Skript braucht `.env` im Repo-Wurzelverzeichnis. Es kann regelmäßig (z. B.
-per Cron auf dem Admin-Rechner) laufen; außerhalb des Crawl-Fensters löst der
-gestoppte Firecrawl-Stack keinen Dauer-Alarm aus, weil der Firecrawl-Check nur
-zwischen 02:50 und 04:00 aktiv ist. Ein `FAIL`-Eintrag ist ein Alarm, kein
-stiller Logeintrag.
+Das Skript braucht `.env` im Repo-Wurzelverzeichnis. Es kann regelmäßig auf
+dem Admin-Rechner laufen, z. B. alle 15 Minuten per Cron:
+
+```cron
+*/15 * * * * cd /pfad/zu/shopagent && ./scripts/healthcheck.sh >>/var/log/shopagent-health.log 2>&1
+```
+
+Außerhalb des Crawl-Fensters löst der gestoppte Firecrawl-Stack keinen
+Dauer-Alarm aus, weil der Firecrawl-Check nur zwischen 02:50 und 04:00 aktiv
+ist. Ein `FAIL`-Eintrag ist ein Alarm, kein stiller Logeintrag.
 
 ### n8n-Fehlerworkflow importieren und verknüpfen
 
@@ -94,6 +101,7 @@ Zeitplan muss er aktiv sein. Er schreibt einen neuen Lauf in `crawl_runs`.
 Ergebnis prüfen:
 
 ```bash
+set -a; source .env; set +a
 DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
 pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c \"select status, urls_fetched, products_upserted, products_deactivated from crawl_runs order by started_at desc limit 1;\""
 ```
@@ -101,7 +109,7 @@ pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 
 Nach dem Lauf den Stack wieder stoppen, wenn er nicht bis 04:00 laufen soll:
 
 ```bash
-pct exec "$CRAWLER_CT" -- systemctl stop shopagent-crawler.service
+pct exec "$CRAWLER_CT" -- systemctl start shopagent-crawler-stop.service
 ```
 
 Der nächste reguläre Lauf startet Firecrawl um 02:50 und stoppt es um 04:00
@@ -171,6 +179,7 @@ Backup-Erzeugung und Restore-Test stehen in `docs/runbooks/backup.md`. Ein
 Restore wird **zuerst immer** in eine Scratch-DB geprüft:
 
 ```bash
+set -a; source .env; set +a
 DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
 BACKUP="/var/backups/shopagent/JJJJ-MM-TT-HHMM"
 pct push "$DB_CT" scripts/restore.sh /opt/shopagent/scripts/restore.sh
@@ -187,7 +196,7 @@ Produktiv-Restore nur im Notfall und nur nach erfolgreichem Scratch-Test:
 
    ```bash
    CRAWLER_CT="$(pct list | awk '/shopagent-crawler/{print $1}')"
-   pct exec "$CRAWLER_CT" -- systemctl stop shopagent-crawler.service
+   pct exec "$CRAWLER_CT" -- systemctl start shopagent-crawler-stop.service
    N8N_CT="$(pct list | awk '/shopagent-n8n/{print $1}')"
    pct exec "$N8N_CT" -- bash -c 'cd /opt/shopagent && docker compose stop n8n'
    ```
@@ -195,6 +204,7 @@ Produktiv-Restore nur im Notfall und nur nach erfolgreichem Scratch-Test:
 2. Im DB-LXC `postgres` mit dem geprüften Dump überschreiben:
 
    ```bash
+   set -a; source .env; set +a
    pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' pg_restore -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres --clean --if-exists '$BACKUP/postgres.dump'"
    ```
 
@@ -209,6 +219,22 @@ Produktiv-Restore nur im Notfall und nur nach erfolgreichem Scratch-Test:
 
 Ein Produktiv-Restore ist ein blockierter Live-Checkpoint; vorher den
 Scratch-Restore und die Prüfsummen aus `SHA256SUMS` verifizieren.
+
+## Datenaufbewahrung
+
+`scripts/backup.sh` loescht nach jedem Dump-Lauf `callbacks`-Eintraege, die
+aelter als 30 Tage sind (`created_at < now() - interval '30 days'`, als
+`DB_ADMIN_USER`). Die Loeschfrist ist damit implementiert, nicht nur
+dokumentiert. Zum Pruefen:
+
+```bash
+set -a; source .env; set +a
+DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
+pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c \"select count(*) from callbacks where created_at < now() - interval '30 days';\""
+```
+
+Erwartet nach einem Backup-Lauf: `0`. Der Purge laeuft nur zusammen mit dem
+naechtlichen Backup, nicht als eigener Timer.
 
 ## Tunnel-Neustart
 
@@ -284,6 +310,7 @@ Monatlich (bzw. am Monatsanfang) prüfen:
    Zusätzlich die Gesprächsminuten aus der DB schätzen:
 
    ```bash
+   set -a; source .env; set +a
    DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
    pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c \"select count(*) as calls, round(coalesce(sum(duration_sec),0)/60.0, 1) as minutes from calls where started_at >= date_trunc('month', now());\""
    ```
@@ -310,6 +337,7 @@ sein.
 | `FAIL: n8n` | n8n-Container im n8n-LXC (`docker compose ps`), Unit/Logs prüfen |
 | `FAIL: firecrawl` | Tritt nur zwischen 02:50 und 04:00 auf; Crawler-Stack im Fenster starten/prüfen (außerhalb wird der Check übersprungen) |
 | `FAIL: produktdaten ...` | Letzten `crawl_runs`-Eintrag und Firecrawl-Log prüfen; Re-Crawl |
+| `FAIL: letzter Crawl: ...` | `crawl_runs.errors` und Firecrawl-Antworten prüfen; Re-Crawl starten |
 | `FAIL: produktzahl sinkt` | Crawl auf Teilausfall prüfen; `crawl_runs.errors` und Firecrawl-Antworten |
 | `FAIL: tunnel/auth` | Tunnel-Status und n8n-Workflow-Aktivierung; `docs/runbooks/tunnel.md` |
 

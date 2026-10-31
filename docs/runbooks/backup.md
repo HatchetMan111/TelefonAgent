@@ -16,6 +16,18 @@ Der Lauf startet taeglich um **04:30** ueber `shopagent-backup.timer`
 Unterordner aelter als `BACKUP_RETAIN_DAYS` (Default 14) Tage ist, werden
 geloescht. Das Backup laeuft im DB-LXC `shopagent-db` als Systemdienst.
 
+## Speicherort und Disaster Recovery
+
+`BACKUP_DIR` liegt per Default unter `/var/backups/shopagent` **im DB-LXC**.
+Dieser container-lokale Default ist **kein Disaster Recovery**: Geht der LXC
+oder sein Storage verloren, sind auch die Dumps weg. Fuer echte
+Wiederherstellbarkeit muss `BACKUP_DIR` auf Proxmox-/PBS-gestuetztem Storage
+liegen und als Bind-Mount in den DB-LXC eingebunden sein, **oder** nach jedem
+Lauf muss ein Kopierschritt die Dumps vom Container auf externen
+Proxmox-/PBS-Storage bringen (z. B. per Cron auf dem Proxmox-Host). Ohne einen
+dieser beiden Schritte schuetzt das Backup nur vor Datenfehlern, nicht vor
+Verlust des Containers oder Hosts.
+
 ## Voraussetzungen
 
 - `.env` liegt unter `/opt/shopagent/.env` (Modus `600`) und setzt
@@ -68,8 +80,13 @@ Die Werte muessen den Produktivzahlen entsprechen (Vergleich z. B. mit
 Im DB-LXC:
 
 ```bash
+chmod +x scripts/backup.sh scripts/restore.sh
+DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
+pct exec "$DB_CT" -- mkdir -p /opt/shopagent/scripts /var/backups/shopagent
 pct push "$DB_CT" scripts/backup.sh /opt/shopagent/scripts/backup.sh
 pct push "$DB_CT" scripts/restore.sh /opt/shopagent/scripts/restore.sh
+pct push "$DB_CT" .env /opt/shopagent/.env
+pct exec "$DB_CT" -- chmod 600 /opt/shopagent/.env
 pct exec "$DB_CT" -- chmod +x /opt/shopagent/scripts/backup.sh /opt/shopagent/scripts/restore.sh
 pct push "$DB_CT" systemd/shopagent-backup.service /etc/systemd/system/shopagent-backup.service
 pct push "$DB_CT" systemd/shopagent-backup.timer /etc/systemd/system/shopagent-backup.timer

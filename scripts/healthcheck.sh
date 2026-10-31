@@ -7,7 +7,7 @@ note() { echo "FAIL: $*" >&2; FAIL=1; }
 
 pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" >/dev/null || note "postgres"
 curl -fsS "http://$N8N_LAN_IP:5678/healthz" >/dev/null || note "n8n"
-HHMM="$(date +%H%M)"
+HHMM="$(TZ=Europe/Berlin date +%H%M)"
 if [[ ! "$HHMM" < "0250" ]] && [[ "$HHMM" < "0400" ]]; then
   curl -fsS "http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/test" >/dev/null || note "firecrawl"
 fi
@@ -17,6 +17,14 @@ if ! FRESH="$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB
   note "produktdaten abfrage fehlgeschlagen"
 elif [[ "$FRESH" != "t" ]]; then
   note "produktdaten älter als 36h"
+fi
+
+LATEST_CRAWL="$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc \
+  "select status || '|' || jsonb_array_length(errors) from crawl_runs order by started_at desc limit 1;" 2>/dev/null || true)"
+if [[ -n "$LATEST_CRAWL" ]]; then
+  CRAWL_STATUS="${LATEST_CRAWL%%|*}"
+  CRAWL_ERRORS="${LATEST_CRAWL#*|}"
+  [[ "$CRAWL_STATUS" == "success" ]] || note "letzter Crawl: $CRAWL_STATUS ($CRAWL_ERRORS Fehler)"
 fi
 
 STATE_DIR="${STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/shopagent}"

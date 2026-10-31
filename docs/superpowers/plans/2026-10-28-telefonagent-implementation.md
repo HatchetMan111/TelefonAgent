@@ -78,7 +78,7 @@ TZ=Europe/Berlin
 SHOP_BASE_URL=https://shop.example
 SHOP_SITEMAP_URL=https://shop.example/sitemap.xml
 SHOP_PRODUCT_PATTERN='/(produkt|product|p)/'
-SHOP_INFO_PATHS=/versand,/rueckgabe,/zahlung,/kontakt,/impressum,/oeffnungszeiten
+SHOP_INFO_PATHS=/versand,/rueckgabe,/zahlung,/kontakt,/impressum,/oeffnungszeiten,/lieferzeit
 SHOP_NAME=Beispielshop
 SHOP_URL=https://shop.example
 HUMAN_TRANSFER_NUMBER=+49...
@@ -1457,8 +1457,15 @@ function parseSitemap(xml, productPattern) {
   const source = raw.startsWith('/') && raw.lastIndexOf('/') > 0
     ? raw.slice(1, raw.lastIndexOf('/'))
     : raw;
-  const pattern = new RegExp(source, 'i');
-  const products = urls.filter((u) => pattern.test(u));
+  const pattern = new RegExp(`(?:^|/)(${source})(?:/|$)`, 'i');
+  const exclude = /(?:^|\/)(?:warenkorb|cart|checkout|kasse|account|konto|search|suche|filter)(?:\/|$)/i;
+  const pathOf = (u) => {
+    try { return new URL(u).pathname; } catch { return u; }
+  };
+  const products = urls.filter((u) => {
+    const path = pathOf(u);
+    return !exclude.test(path) && pattern.test(path);
+  });
   return { kind: 'urlset', urls: products };
 }
 module.exports = { parseSitemap };
@@ -1515,6 +1522,11 @@ test('sitemapindex liefert alle Loc-Einträge', () => {
 
 test('leere Sitemap -> leeres Array', () => {
   assert.deepEqual(parseSitemap('<urlset></urlset>', '/produkt/'), { kind: 'urlset', urls: [] });
+});
+
+test('kurzes Produktsegment trifft keine Nicht-Produktpfade', () => {
+  const xml = `<urlset><url><loc>https://s/impressum</loc></url><url><loc>https://s/warenkorb</loc></url><url><loc>https://s/p/foo</loc></url></urlset>`;
+  assert.deepEqual(parseSitemap(xml, '/p/'), { kind: 'urlset', urls: ['https://s/p/foo'] });
 });
 ```
 
@@ -1756,7 +1768,7 @@ update crawl_runs c set
 where c.id = $1;
 ```
 
-   Parameter: `{{ $json.run_id }}`, `{{ $('URLs parsen').all().length }}`
+   Parameter: `{{ $('Run starten').first().json.id }}`, `{{ $('URLs parsen').all().length }}`
 16. **Fehlerworkflow** in den Workflow-Settings auf `03-error-alert` setzen.
 17. Workflow exportieren nach `n8n/workflows/01-crawl.json`.
 

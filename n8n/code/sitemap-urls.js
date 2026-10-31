@@ -11,11 +11,15 @@ function parseSitemap(xml, productPattern) {
   const source = raw.startsWith('/') && raw.lastIndexOf('/') > 0
     ? raw.slice(1, raw.lastIndexOf('/'))
     : raw;
-  const pattern = new RegExp(source, 'i');
+  const pattern = new RegExp(`(?:^|/)(${source})(?:/|$)`, 'i');
+  const exclude = /(?:^|\/)(?:warenkorb|cart|checkout|kasse|account|konto|search|suche|filter)(?:\/|$)/i;
   const pathOf = (u) => {
     try { return new URL(u).pathname; } catch { return u; }
   };
-  const products = urls.filter((u) => pattern.test(pathOf(u)));
+  const products = urls.filter((u) => {
+    const path = pathOf(u);
+    return !exclude.test(path) && pattern.test(path);
+  });
   return { kind: 'urlset', urls: products };
 }
 module.exports = { parseSitemap };

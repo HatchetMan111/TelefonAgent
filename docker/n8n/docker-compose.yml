@@ -33,6 +33,7 @@ services:
       SHOP_INFO_PATHS: ${SHOP_INFO_PATHS}
       FIRECRAWL_URL: http://${FIRECRAWL_HOST}:${FIRECRAWL_PORT}
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+      NTFY_URL: ${NTFY_URL}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./scripts:/opt/shopagent/scripts:ro

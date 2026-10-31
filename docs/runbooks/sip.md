@@ -9,6 +9,16 @@
 5. Bei TLS: SRTP aktivieren; `media_encryption` bleibt `required`.
 6. Testanruf: Nummer wählen, Begrüßung muss die KI-Offenlegung enthalten.
 
+## Nummer importieren und zuweisen
+
+`.env` laden und den Import zuerst als Dry-Run ansehen, dann anwenden:
+
+```bash
+set -a; source .env; set +a
+node scripts/import-number.mjs --dry-run
+node scripts/import-number.mjs
+```
+
 ## Zuweisung prüfen
 
 ```bash

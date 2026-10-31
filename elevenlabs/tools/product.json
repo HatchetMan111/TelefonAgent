@@ -13,7 +13,8 @@
         "properties": {
           "sku": { "type": "string", "description": "Produkt-SKU, falls bekannt" },
           "name": { "type": "string", "description": "Produktname, falls keine SKU" }
-        }
+        },
+        "anyOf": [{ "required": ["sku"] }, { "required": ["name"] }]
       }
     }
   }

@@ -100,6 +100,7 @@ neu exportieren.
 Im n8n-UI den Workflow öffnen → **Execute Workflow**. Danach in der DB prüfen:
 
 ```bash
+set -a; source .env; set +a
 DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
 pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c 'select count(*) from products; select status, urls_fetched, products_upserted from crawl_runs order by started_at desc limit 3;'"
 ```
@@ -112,6 +113,7 @@ Erwartet: `count > 0`, letzter Lauf `success` (bei einzelnen Firecrawl-Fehlern
 Den Workflow zweimal hintereinander ausführen, dann:
 
 ```bash
+set -a; source .env; set +a
 DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
 pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c 'select count(*) as total, count(distinct sku) as distinct_sku from products;'"
 ```

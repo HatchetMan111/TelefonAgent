@@ -386,7 +386,7 @@
         "operation": "executeQuery",
         "query": "update crawl_runs c set\n  finished_at = now(),\n  status = case when jsonb_array_length(c.errors) = 0 then 'success' else 'partial' end,\n  urls_total = $2,\n  urls_fetched = (select count(*) from products p where p.last_seen_at >= c.started_at)\n                 + jsonb_array_length(c.errors),\n  products_upserted = (select count(*) from products p where p.last_seen_at >= c.started_at),\n  products_deactivated = (select count(*) from products p where not p.is_active and p.updated_at >= c.started_at)\nwhere c.id = $1;",
         "options": {
-          "queryReplacement": "={{ [$json.run_id, $('URLs parsen').all().length] }}"
+          "queryReplacement": "={{ [$('Run starten').first().json.id, $('URLs parsen').all().length] }}"
         }
       },
       "id": "crawl-run-finish",

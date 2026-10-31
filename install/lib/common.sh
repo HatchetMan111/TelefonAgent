@@ -43,7 +43,10 @@ create_lxc() {
     --hostname "$hostname" --cores "$cores" --memory "$ram" --swap 1024 \
     --rootfs "${ROOTFS_STORAGE:-local-lvm}:${disk}" --net0 "name=eth0,bridge=${bridge},ip=dhcp" \
     --unprivileged 1 --features nesting=1,keyctl=1 --onboot 1 --start 1
-  msg_ok "CT $ctid ($hostname) erstellt."
+  local ip
+  ip="$(ct_ip "$ctid")" || return 1
+  pct exec "$ctid" -- timedatectl set-timezone Europe/Berlin
+  msg_ok "CT $ctid ($hostname) erstellt (IP $ip, Zeitzone Europe/Berlin)."
 }
 
 ct_ip() {
