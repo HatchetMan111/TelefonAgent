@@ -14,6 +14,10 @@ test('parsePriceCents: deutsche und internationale Formate', () => {
   assert.equal(parsePriceCents('1.234,56 €'), 123456);
   assert.equal(parsePriceCents('129.90'), 12990);
   assert.equal(parsePriceCents(89.9), 8990);
+  assert.equal(parsePriceCents('1.234'), 123400);
+  assert.equal(parsePriceCents('89,9'), 8990);
+  assert.equal(parsePriceCents('1.234,5'), 123450);
+  assert.equal(parsePriceCents('1,234.56'), 123456);
   assert.equal(parsePriceCents(''), null);
   assert.equal(parsePriceCents(null), null);
 });
@@ -22,6 +26,8 @@ test('mapAvailability', () => {
   assert.equal(mapAvailability('https://schema.org/InStock'), 'instock');
   assert.equal(mapAvailability('https://schema.org/OutOfStock'), 'outofstock');
   assert.equal(mapAvailability('https://schema.org/PreOrder'), 'preorder');
+  assert.equal(mapAvailability('unavailable'), 'outofstock');
+  assert.equal(mapAvailability('not available'), 'outofstock');
   assert.equal(mapAvailability(''), 'unknown');
 });
 
@@ -57,4 +63,17 @@ test('normalizeProduct: SKU fehlt -> Slug, sonst Fehler', () => {
   const ok = normalizeProduct({ name: 'X', slug: 'x-1', sku: null }, 'https://shop.example/produkt/x-1');
   assert.equal(ok.sku, 'x-1');
   assert.throws(() => normalizeProduct({ name: 'X', sku: null, slug: null }, 'kaputt'), /sku or slug/);
+});
+
+test('normalizeProduct: alle 12 Schlüssel mit Defaults', () => {
+  const p = normalizeProduct({ name: 'X', sku: 'S-1' }, 'https://shop.example/produkt/x-1');
+  assert.deepEqual(
+    Object.keys(p).sort(),
+    ['sku', 'slug', 'name', 'description', 'price_cents', 'currency', 'availability',
+      'category', 'brand', 'attributes', 'image_url', 'product_url'].sort()
+  );
+  assert.equal(p.slug, 'x-1');
+  assert.equal(p.currency, 'EUR');
+  assert.equal(p.availability, 'unknown');
+  assert.deepEqual(p.attributes, {});
 });

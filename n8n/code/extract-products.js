@@ -20,9 +20,20 @@ function parsePriceCents(value) {
   if (!raw) return null;
   const cleaned = raw.replace(/[^\d,.-]/g, '');
   if (!cleaned) return null;
-  const normalized = /,\d{2}$/.test(cleaned)
-    ? cleaned.replace(/\./g, '').replace(',', '.')
-    : cleaned.replace(/,/g, '');
+  const lastDot = cleaned.lastIndexOf('.');
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastSep = Math.max(lastDot, lastComma);
+  let normalized;
+  if (lastSep !== -1 && cleaned.length - lastSep - 1 >= 1 && cleaned.length - lastSep - 1 <= 2) {
+    const dec = cleaned[lastSep];
+    const other = dec === '.' ? ',' : '.';
+    const withoutOther = cleaned.split(other).join('');
+    const idx = withoutOther.lastIndexOf(dec);
+    normalized = withoutOther.slice(0, idx) + '.' + withoutOther.slice(idx + 1);
+  } else {
+    normalized = cleaned.replace(/[.,]/g, '');
+  }
+  if (!normalized) return null;
   const n = Number(normalized);
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
@@ -30,9 +41,9 @@ function parsePriceCents(value) {
 function mapAvailability(value) {
   const v = String(value ?? '').toLowerCase();
   if (!v) return 'unknown';
-  if (/(instock|in_stock|available|lieferbar|auf lager)/.test(v)) return 'instock';
-  if (/(outofstock|out_of_stock|soldout|nicht verfügbar|ausverkauft)/.test(v)) return 'outofstock';
+  if (/(outofstock|out_of_stock|soldout|unavailable|not available|nicht verfügbar|ausverkauft)/.test(v)) return 'outofstock';
   if (/(preorder|backorder|vorbestellung)/.test(v)) return 'preorder';
+  if (/(instock|in_stock|available|lieferbar|auf lager)/.test(v)) return 'instock';
   return 'unknown';
 }
 
@@ -120,8 +131,22 @@ function extractProduct(html, url) {
 function normalizeProduct(raw, url) {
   const p = { ...raw, product_url: raw.product_url ?? url };
   if (!p.name) throw new Error('product without name');
+  if (!p.slug) p.slug = slugFromUrl(url);
   if (!p.sku) p.sku = p.slug;
   if (!p.sku) throw new Error('product without sku or slug');
+  const defaults = {
+    description: '',
+    price_cents: null,
+    currency: 'EUR',
+    availability: 'unknown',
+    category: null,
+    brand: null,
+    attributes: {},
+    image_url: null
+  };
+  for (const [key, value] of Object.entries(defaults)) {
+    if (p[key] == null) p[key] = value;
+  }
   return p;
 }
 
