@@ -71,7 +71,7 @@ systemctl daemon-reload
 systemctl enable telefonagent.service
 systemctl restart telefonagent.service
 
-for _ in $(seq 1 60); do
+for _ in $(seq 1 200); do
   if systemctl is-active --quiet telefonagent.service && curl -fsS http://127.0.0.1:5678/healthz >/dev/null 2>&1; then
     log "Stack läuft"
     docker compose --env-file "$ROOT/.env" -f "$ROOT/vm/docker-compose.yml" ps
@@ -82,4 +82,4 @@ done
 
 systemctl --no-pager --full status telefonagent.service || true
 docker compose --env-file "$ROOT/.env" -f "$ROOT/vm/docker-compose.yml" logs --tail=100 || true
-fail "Web-UI antwortet nach 180s nicht"
+fail "Web-UI antwortet nach 600s nicht"
