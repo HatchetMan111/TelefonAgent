@@ -1,0 +1,599 @@
+{
+  "name": "ShopAgent API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shopagent/:action",
+        "responseMode": "responseNode",
+        "authentication": "none",
+        "options": {}
+      },
+      "id": "agent-api-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "shopagent-api"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "agent-api-auth-cond",
+              "leftValue": "={{ $json.headers.authorization }}",
+              "rightValue": "={{ 'Bearer ' + $env.AGENT_WEBHOOK_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "agent-api-auth",
+      "name": "Auth ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\":false,\"message\":\"unauthorized\"}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "agent-api-401",
+      "name": "401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const action = $json.params?.action ?? '';\nconst body = $json.body ?? {};\nconst allowed = ['search', 'product', 'info', 'callback', 'handoff'];\nif (!allowed.includes(action)) return [{ json: { __bad: true } }];\nreturn [{ json: { ...body, action } }];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "agent-api-route",
+      "name": "Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "agent-api-bad-action-cond",
+              "leftValue": "={{ $json.__bad }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "agent-api-bad-action",
+      "name": "Bad action?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\":false,\"message\":\"Unbekannte Aktion.\"}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "agent-api-404",
+      "name": "404",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "agent-api-switch-search",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "search"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "agent-api-switch-product",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "product",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "product"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "agent-api-switch-info",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "info",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "info"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "agent-api-switch-callback",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "callback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "callback"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "agent-api-switch-handoff",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "handoff",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "handoff"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "agent-api-switch",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "select search_products($1, $2, $3, $4, 5) as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.query, $json.category || null, $json.max_price_eur != null ? Math.round($json.max_price_eur * 100) : null, $json.in_stock_only ?? false] }}"
+        }
+      },
+      "id": "agent-api-search",
+      "name": "Suche",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1100,
+        -320
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "ShopAgent DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "select jsonb_build_object(\n  'as_of', to_char(now() at time zone 'Europe/Berlin', 'YYYY-MM-DD'),\n  'product', jsonb_build_object(\n    'sku', p.sku,\n    'name', p.name,\n    'description', p.description,\n    'price_eur', round(p.price_cents / 100.0, 2),\n    'availability', p.availability,\n    'url', p.product_url,\n    'image_url', p.image_url,\n    'brand', p.brand,\n    'category', p.category,\n    'last_seen', p.last_seen_at\n  ),\n  'variants', '[]'::jsonb\n) as result\nfrom products p\nwhere p.is_active\n  and (p.sku = $1 or p.slug = $1 or p.name ilike '%' || $1 || '%')\norder by (p.sku = $1 or p.slug = $1) desc, similarity(p.name, $1) desc\nlimit 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.sku || $json.name] }}"
+        }
+      },
+      "id": "agent-api-product",
+      "name": "Produkt",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1100,
+        -160
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "ShopAgent DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "select jsonb_build_object(\n  'answer', content_md,\n  'source_url', url,\n  'as_of', to_char(updated_at at time zone 'Europe/Berlin', 'YYYY-MM-DD')\n) as result\nfrom pages\nwhere topic = $1\norder by updated_at desc\nlimit 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.topic] }}"
+        }
+      },
+      "id": "agent-api-info",
+      "name": "Info",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1100,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "ShopAgent DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "insert into callbacks (name, phone, reason) values ($1, $2, $3) returning id;",
+        "options": {
+          "queryReplacement": "={{ [$json.name || null, $json.phone, $json.reason] }}"
+        }
+      },
+      "id": "agent-api-callback",
+      "name": "Rückruf",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1100,
+        160
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "ShopAgent DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "operation": "executeQuery",
+        "query": "select jsonb_build_object('ok', true, 'action', 'transfer', 'reason', $1) as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.reason] }}"
+        }
+      },
+      "id": "agent-api-handoff",
+      "name": "Übergabe",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1100,
+        320
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "ShopAgent DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const action = $('Route').first().json.action;\nconst row = $json.result ?? $json;\nif (row == null || (typeof row === 'object' && Object.keys(row).length === 0)) {\n  return [{ json: { ok: false, message: 'Dazu habe ich gerade keine Information.' } }];\n}\nif (action === 'callback') {\n  return [{ json: { ok: true, reference: String(row.id).slice(0, 8) } }];\n}\nreturn [{ json: row }];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "agent-api-format",
+      "name": "Antwort formen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "agent-api-200",
+      "name": "200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Auth ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth ok?": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Bad action?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bad action?": {
+      "main": [
+        [
+          {
+            "node": "404",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Suche",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Produkt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rückruf",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Übergabe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suche": {
+      "main": [
+        [
+          {
+            "node": "Antwort formen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Produkt": {
+      "main": [
+        [
+          {
+            "node": "Antwort formen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Info": {
+      "main": [
+        [
+          {
+            "node": "Antwort formen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rückruf": {
+      "main": [
+        [
+          {
+            "node": "Antwort formen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Übergabe": {
+      "main": [
+        [
+          {
+            "node": "Antwort formen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Antwort formen": {
+      "main": [
+        [
+          {
+            "node": "200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
