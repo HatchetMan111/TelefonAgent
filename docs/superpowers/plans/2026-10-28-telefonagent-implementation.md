@@ -1052,13 +1052,20 @@ Auf dem Host, mit gesetztem `DB_PASSWORD` und `DB_ADMIN_PASSWORD`:
 ```bash
 set -a; source .env; set +a
 DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
-DB_IP="$(pct exec "$DB_CT" -- ip -4 -o addr show eth0 | awk '{print $4}' | cut -d/ -f1)"
-pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -v pw='$DB_PASSWORD' -c \"create role shopagent login password :'pw';\"" || true
-pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c 'create database n8n owner shopagent;'" || true
-pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c 'grant usage on schema public to shopagent; grant select, insert, update on all tables in schema public to shopagent; alter default privileges in schema public grant select, insert, update on tables to shopagent;'"
+run_psql() {
+  pct exec "$DB_CT" -- env PGPASSWORD="$DB_ADMIN_PASSWORD" \
+    psql -h 127.0.0.1 -p 54322 -U "$DB_ADMIN_USER" -d postgres -v pw="$DB_PASSWORD" "$@"
+}
+if [[ "$(run_psql -tAc "select 1 from pg_roles where rolname='shopagent'")" == "1" ]]; then
+  printf "alter role shopagent with login password :'pw';\n" | run_psql
+else
+  printf "create role shopagent login password :'pw';\n" | run_psql
+fi
+run_psql -c 'create database n8n owner shopagent;' || true
+run_psql -c 'grant usage on schema public to shopagent; grant select, insert, update on all tables in schema public to shopagent; alter default privileges in schema public grant select, insert, update on tables to shopagent;'
 ```
 
-Erwartet: `CREATE ROLE`, `CREATE DATABASE`, `GRANT`.
+Erwartet: `CREATE ROLE`/`ALTER ROLE`, `CREATE DATABASE`, `GRANT`.
 
 - [ ] **Step 9: Commit**
 
