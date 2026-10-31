@@ -19,12 +19,21 @@ elif [[ "$FRESH" != "t" ]]; then
   note "produktdaten älter als 36h"
 fi
 
-LATEST_CRAWL="$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc \
-  "select status || '|' || jsonb_array_length(errors) from crawl_runs order by started_at desc limit 1;" 2>/dev/null || true)"
-if [[ -n "$LATEST_CRAWL" ]]; then
+if ! LATEST_CRAWL="$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc \
+  "select status || '|' || jsonb_array_length(errors) || '|' || (now() - started_at > interval '2 hours') from crawl_runs order by started_at desc limit 1;")"; then
+  note "crawl-status abfrage fehlgeschlagen"
+elif [[ -n "$LATEST_CRAWL" ]]; then
   CRAWL_STATUS="${LATEST_CRAWL%%|*}"
-  CRAWL_ERRORS="${LATEST_CRAWL#*|}"
-  [[ "$CRAWL_STATUS" == "success" ]] || note "letzter Crawl: $CRAWL_STATUS ($CRAWL_ERRORS Fehler)"
+  CRAWL_REST="${LATEST_CRAWL#*|}"
+  CRAWL_ERRORS="${CRAWL_REST%%|*}"
+  CRAWL_STALE="${CRAWL_REST#*|}"
+  if [[ "$CRAWL_STATUS" == "success" ]]; then
+    :
+  elif [[ "$CRAWL_STATUS" == "running" && "$CRAWL_STALE" != "t" ]]; then
+    :
+  else
+    note "letzter Crawl: $CRAWL_STATUS ($CRAWL_ERRORS Fehler)"
+  fi
 fi
 
 STATE_DIR="${STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/shopagent}"
