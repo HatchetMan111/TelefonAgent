@@ -1,0 +1,7 @@
+tunnel: ${TUNNEL_ID}
+credentials-file: /etc/cloudflared/credentials.json
+ingress:
+  - hostname: ${TUNNEL_HOST}
+    path: ^/webhook/shopagent/.*
+    service: http://localhost:5678
+  - service: http_status:404
