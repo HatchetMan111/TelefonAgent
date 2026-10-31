@@ -72,12 +72,16 @@ async function runTests(testIds) {
   return out;
 }
 
-async function waitFor(runId) {
+const TERMINAL_STATUSES = new Set(['passed', 'failed', 'cancelled']);
+
+async function waitFor(runId, expected) {
   for (let i = 0; i < 60; i++) {
     const run = await call(`${API}/test-invocations/${runId}`);
     const results = run.test_runs ?? [];
-    if (results.length && results.every((r) => r.status !== 'pending')) return results;
-    await new Promise((resolve) => setTimeout(resolve, 10000));
+    if (results.length >= expected && results.every((r) => TERMINAL_STATUSES.has(r.status))) {
+      return results;
+    }
+    if (i < 59) await new Promise((resolve) => setTimeout(resolve, 10000));
   }
   throw new Error('Timeout beim Warten auf den Testlauf');
 }
@@ -98,7 +102,7 @@ try {
   for (const c of cases) tests.push({ id: c.id, testId: await createTest(c) });
 
   const invocation = await runTests(tests.map((t) => t.testId));
-  const runs = await waitFor(invocation.id);
+  const runs = await waitFor(invocation.id, tests.length);
   const byTest = new Map(runs.map((r) => [r.test_id, r]));
 
   const results = tests.map(({ id, testId }) => {
