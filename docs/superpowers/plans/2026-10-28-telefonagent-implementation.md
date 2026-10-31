@@ -1928,7 +1928,10 @@ return [{ json: row }];
 - [ ] **Step 3: Test ausführen**
 
 ```bash
-export AGENT_WEBHOOK_SECRET="$(grep '^AGENT_WEBHOOK_SECRET=' .env | cut -d= -f2-)"
+set -a; source .env; set +a
+: "${DB_ADMIN_USER:?DB_ADMIN_USER fehlt in .env}"
+: "${DB_ADMIN_PASSWORD:?DB_ADMIN_PASSWORD fehlt in .env}"
+: "${AGENT_WEBHOOK_SECRET:?AGENT_WEBHOOK_SECRET fehlt in .env}"
 DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
 pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c \"insert into pages (url,title,content_md,topic,content_hash) values ('https://shop.example/oeffnungszeiten','Öffnungszeiten','Mo-Fr 9-18 Uhr','oeffnungszeiten','seed') on conflict (url) do update set content_md=excluded.content_md;\""
 pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c \"insert into products (sku,name,price_cents,currency,availability,product_url,source_hash) values ('REGEN-42','Regenschuh Urban 42 schwarz',8990,'EUR','instock','https://shop.example/produkt/regenschuh-urban-42-schwarz','seed') on conflict (sku) do update set name=excluded.name, price_cents=excluded.price_cents, availability=excluded.availability;\""
