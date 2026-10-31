@@ -26,7 +26,7 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/unbekannt" \
 [[ "$code" == "404" ]] || { echo "FAIL unknown action: $code"; exit 1; }
 echo "OK unknown action"
 
-check search '{"query":"Regenschuh"}' '"products"'
+check search '{"query":"Regenschuh"}' '"products"' '"as_of"' '"price_eur"'
 check product '{"sku":"REGEN-42"}' '"product"' '"variants"' '"price_eur"'
 check info '{"topic":"oeffnungszeiten"}' '"answer"' '"source_url"' '"as_of"'
 check callback '{"name":"Max","phone":"+491701234567","reason":"Test"}' '"reference"'
