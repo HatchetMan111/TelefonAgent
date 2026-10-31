@@ -1,0 +1,7 @@
+[Unit]
+Description=ShopAgent database backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/shopagent
+ExecStart=/opt/shopagent/scripts/backup.sh
