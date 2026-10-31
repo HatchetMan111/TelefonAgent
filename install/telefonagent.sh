@@ -210,33 +210,71 @@ if [[ ! -f "$SSH_KEY" ]]; then
 fi
 PUBKEY="${SSH_KEY}.pub"
 
-if [[ "$EXISTING" -eq 0 ]]; then
+IMAGE_PATH="$IMAGE_DIR/debian-13-genericcloud-amd64.qcow2"
+
+ensure_image() {
   mkdir -p "$IMAGE_DIR"
-  IMAGE_PATH="$IMAGE_DIR/debian-13-genericcloud-amd64.qcow2"
   if [[ ! -f "$IMAGE_PATH" ]]; then
     log "Debian-13-Cloud-Image herunterladen"
     wget -q --show-progress -O "$IMAGE_PATH" "$IMAGE_URL"
   fi
+}
 
+ensure_disk() {
+  local cfg volume logf
+  cfg="$(qm config "$VMID")"
+  if grep -q '^scsi0:' <<<"$cfg"; then
+    return 0
+  fi
+  if qm status "$VMID" | grep -q running; then
+    qm stop "$VMID"
+  fi
+
+  volume="$(awk -F': ' '/^unused[0-9]+:/{print $2; exit}' <<<"$cfg")"
+  if [[ -z "$volume" ]]; then
+    ensure_image
+    log "Disk importieren"
+    logf="$(mktemp)"
+    if ! qm importdisk "$VMID" "$IMAGE_PATH" "$STORAGE" --format=qcow2 >"$logf" 2>&1; then
+      cat "$logf" >&2
+      rm -f "$logf"
+      err "qm importdisk ist fehlgeschlagen."
+      exit 1
+    fi
+    volume="$(awk -F': ' '/^unused[0-9]+:/{print $2; exit}' <<<"$(qm config "$VMID")")"
+    if [[ -z "$volume" ]]; then
+      volume="$(sed -n "s/.*as '\([^']*\)'.*/\1/p" "$logf" | tail -1)"
+    fi
+    if [[ -z "$volume" ]]; then
+      cat "$logf" >&2
+      rm -f "$logf"
+      err "Importiertes Volume konnte nicht ermittelt werden."
+      qm config "$VMID" >&2 || true
+      exit 1
+    fi
+    rm -f "$logf"
+  fi
+  volume="$(printf '%s' "$volume" | sed 's/^unused[0-9]*://')"
+  log "Disk anhängen: $volume"
+  qm set "$VMID" --scsi0 "$volume" --ide2 "$STORAGE:cloudinit" --boot order=scsi0
+  qm resize "$VMID" scsi0 "${DISK}G" >/dev/null 2>&1 || true
+  qm set "$VMID" --agent enabled=1 --ciuser root --sshkeys "$PUBKEY" \
+    --ipconfig0 "$IPCONFIG" --cipassword "$ROOT_PW"
+  qm cloudinit update "$VMID"
+}
+
+if [[ "$EXISTING" -eq 0 ]]; then
   log "VM $VMID ($VM_NAME) anlegen"
   qm create "$VMID" \
     --name "$VM_NAME" --memory "$MEMORY" --cores "$CORES" --sockets 1 \
     --cpu host --ostype l26 --scsihw virtio-scsi-pci \
     --net0 "virtio,bridge=$BRIDGE" --serial0 socket --onboot 1
-  qm importdisk "$VMID" "$IMAGE_PATH" "$STORAGE" --format=qcow2 >/tmp/telefonagent-import.$$ 2>&1
-  VOLUME="$(sed -n "s/.*as '\\([^']*\\)'.*/\\1/p" /tmp/telefonagent-import.$$ | tail -1)"
-  rm -f /tmp/telefonagent-import.$$
-  [[ -n "$VOLUME" ]] || { err "Konnte importiertes Volume nicht ermitteln."; exit 1; }
-  VOLUME="${VOLUME#unused0:}"
-  qm set "$VMID" --scsi0 "$VOLUME" --ide2 "$STORAGE:cloudinit" --boot order=scsi0
-  qm resize "$VMID" scsi0 "${DISK}G"
-  qm set "$VMID" --agent enabled=1 --ciuser root --sshkeys "$PUBKEY" \
-    --ipconfig0 "$IPCONFIG" --cipassword "$ROOT_PW"
-  qm cloudinit update "$VMID"
+  ensure_disk
   log "VM starten"
   qm start "$VMID"
 else
   qm set "$VMID" --onboot 1 >/dev/null
+  ensure_disk
   if ! qm status "$VMID" | grep -q running; then
     qm start "$VMID"
   fi
