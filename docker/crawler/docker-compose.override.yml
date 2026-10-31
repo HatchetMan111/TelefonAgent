@@ -1,0 +1,14 @@
+services:
+  api:
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      HOST: 0.0.0.0
+      USE_DB_AUTHENTICATION: "false"
+  worker:
+    environment:
+      USE_DB_AUTHENTICATION: "false"
+      NUM_WORKERS_PER_QUEUE: "2"
+  playwright-service:
+    shm_size: "1gb"
