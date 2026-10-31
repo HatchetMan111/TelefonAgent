@@ -26,17 +26,17 @@ language sql stable as $$
     where to_tsvector('german', coalesce(name,'') || ' ' || coalesce(description,''))
           @@ (select ts from qq)
     order by rank desc
-    limit p_limit
+    limit greatest(0, least(coalesce(p_limit, 5), 5))
   ),
   fuzzy as (
     select * from base
     where not exists (select 1 from fts)
       and similarity(name, coalesce(nullif(trim(q), ''), '')) > 0.15
     order by similarity(name, coalesce(nullif(trim(q), ''), '')) desc
-    limit p_limit
+    limit greatest(0, least(coalesce(p_limit, 5), 5))
   )
   select jsonb_build_object(
-    'as_of', to_char(now(), 'YYYY-MM-DD'),
+    'as_of', to_char(now() at time zone 'Europe/Berlin', 'YYYY-MM-DD'),
     'products', coalesce(jsonb_agg(jsonb_build_object(
       'sku', sku,
       'name', name,
