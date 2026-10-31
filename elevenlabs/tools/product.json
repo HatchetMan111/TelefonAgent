@@ -1,0 +1,20 @@
+{
+  "tool_config": {
+    "type": "webhook",
+    "name": "get_product",
+    "description": "Liefert Details zu genau einem Produkt. Nutze es, wenn der Anrufer einen konkreten Produktnamen oder eine SKU nennt.",
+    "response_timeout_secs": 10,
+    "api_schema": {
+      "url": "https://TUNNEL_HOST/webhook/shopagent/product",
+      "method": "POST",
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "sku": { "type": "string", "description": "Produkt-SKU, falls bekannt" },
+          "name": { "type": "string", "description": "Produktname, falls keine SKU" }
+        }
+      }
+    }
+  }
+}

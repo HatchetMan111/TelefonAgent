@@ -1,0 +1,50 @@
+{
+  "name": "ShopAgent",
+  "conversation_config": {
+    "agent": {
+      "first_message": "Guten Tag, Sie sprechen mit dem KI-Assistenten von {{shop_name}}. Ich kann Ihnen zu Produkten, Preisen und Lieferung helfen. Sagen Sie jederzeit, wenn Sie mit einem Menschen sprechen möchten.",
+      "language": "de",
+      "prompt": {
+        "prompt": "PROMPT_FROM_FILE",
+        "llm": "gemini-2.0-flash",
+        "temperature": 0.2,
+        "max_tokens": 150,
+        "built_in_tools": {
+          "transfer_to_number": {
+            "name": "transfer_to_number",
+            "description": "Leitet den Anruf an einen Menschen weiter.",
+            "params": {
+              "system_tool_type": "transfer_to_number",
+              "transfers": [
+                {
+                  "transfer_destination": {
+                    "type": "phone",
+                    "phone_number": "HUMAN_TRANSFER_NUMBER"
+                  },
+                  "condition": "Der Anrufer möchte mit einem Menschen sprechen oder es liegt eine Beschwerde/Reklamation vor."
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "tts": {
+      "voice_id": "VOICE_ID",
+      "model_id": "eleven_flash_v2_5",
+      "stability": 0.5,
+      "similarity_boost": 0.75
+    },
+    "turn": {
+      "turn_timeout": 7,
+      "silence_end_call_timeout": 20
+    },
+    "conversation": { "max_duration_seconds": 600 }
+  },
+  "platform_settings": {
+    "privacy": {
+      "record_voice": false,
+      "retention_days": 30
+    }
+  }
+}

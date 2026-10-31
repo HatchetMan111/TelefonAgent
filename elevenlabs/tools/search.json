@@ -1,0 +1,24 @@
+{
+  "tool_config": {
+    "type": "webhook",
+    "name": "search_products",
+    "description": "Sucht Produkte im Shop. Nutze dieses Tool bei Fragen nach Produkten, Preisen, Kategorien oder Verfügbarkeit.",
+    "response_timeout_secs": 10,
+    "pre_tool_speech": "force",
+    "api_schema": {
+      "url": "https://TUNNEL_HOST/webhook/shopagent/search",
+      "method": "POST",
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Suchbegriff, z. B. Produktname oder Kategorie" },
+          "category": { "type": "string", "description": "Optional: Kategorie" },
+          "max_price_eur": { "type": "number", "description": "Optional: Höchstpreis in Euro" },
+          "in_stock_only": { "type": "boolean", "description": "Optional: nur verfügbare Produkte" }
+        },
+        "required": ["query"]
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "tool_config": {
+    "type": "webhook",
+    "name": "handoff_to_human",
+    "description": "Protokolliert die Übergabe an einen Menschen. Die eigentliche Weiterleitung macht das native Transfer-Tool.",
+    "response_timeout_secs": 10,
+    "api_schema": {
+      "url": "https://TUNNEL_HOST/webhook/shopagent/handoff",
+      "method": "POST",
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "reason": { "type": "string", "enum": ["beschwerde", "reklamation", "beratung", "sonstiges"] }
+        },
+        "required": ["reason"]
+      }
+    }
+  }
+}

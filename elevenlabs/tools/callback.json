@@ -1,0 +1,22 @@
+{
+  "tool_config": {
+    "type": "webhook",
+    "name": "create_callback",
+    "description": "Notiert einen Rückrufwunsch mit Name, Telefonnummer und Grund.",
+    "response_timeout_secs": 10,
+    "api_schema": {
+      "url": "https://TUNNEL_HOST/webhook/shopagent/callback",
+      "method": "POST",
+      "request_headers": { "Authorization": "Bearer AGENT_WEBHOOK_SECRET" },
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "phone": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "required": ["phone", "reason"]
+      }
+    }
+  }
+}
