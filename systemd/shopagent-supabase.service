@@ -1,0 +1,15 @@
+[Unit]
+Description=ShopAgent Supabase stack
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/shopagent
+ExecStart=/usr/bin/npx --yes supabase@2 start
+ExecStop=/usr/bin/npx --yes supabase@2 stop
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target
