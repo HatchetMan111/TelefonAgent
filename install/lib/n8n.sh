@@ -10,16 +10,16 @@ install_n8n() {
     exit 1
   fi
 
+  if grep -q 'CHANGE_ME' "$ROOT/.env"; then
+    msg_error ".env enthält noch CHANGE_ME – bitte ausfüllen."
+    exit 1
+  fi
+
   ensure_template "$store"
   create_lxc "$ctid" "shopagent-n8n" "$cores" "$ram" "$disk" "$bridge"
   local ip; ip="$(ct_ip "$ctid")"
   msg_info "shopagent-n8n IP: $ip"
   install_docker "$ctid"
-
-  if grep -q 'CHANGE_ME' "$ROOT/.env"; then
-    msg_error ".env enthält noch CHANGE_ME – bitte ausfüllen."
-    exit 1
-  fi
 
   pct exec "$ctid" -- mkdir -p /opt/shopagent /opt/shopagent/scripts /opt/shopagent/n8n/code /etc/cloudflared
   pct push "$ctid" "$ROOT/docker/n8n/docker-compose.yml" /opt/shopagent/docker-compose.yml

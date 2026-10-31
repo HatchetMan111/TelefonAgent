@@ -7,6 +7,7 @@ Wants=network-online.target docker.service
 Restart=always
 RestartSec=5
 EnvironmentFile=/opt/shopagent/.env
+ExecStartPre=/usr/bin/test -n "${CLOUDFLARED_IMAGE}"
 ExecStart=/usr/bin/docker run --rm --name shopagent-cloudflared --network host \
   -v /etc/cloudflared:/etc/cloudflared:ro \
   ${CLOUDFLARED_IMAGE} tunnel --config /etc/cloudflared/config.yml run
