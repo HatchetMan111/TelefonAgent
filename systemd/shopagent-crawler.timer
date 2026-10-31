@@ -3,7 +3,7 @@ Description=Start ShopAgent crawler nightly
 
 [Timer]
 OnCalendar=*-*-* 02:50:00
-Persistent=true
+Persistent=false
 
 [Install]
 WantedBy=timers.target

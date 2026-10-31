@@ -5,7 +5,6 @@ Wants=network-online.target docker.service
 
 [Service]
 Type=oneshot
-RemainAfterExit=yes
 WorkingDirectory=/opt/shopagent-crawler
 ExecStart=/usr/bin/docker compose -f firecrawl/docker-compose.yaml -f docker-compose.override.yml up -d
 ExecStop=/usr/bin/docker compose -f firecrawl/docker-compose.yaml -f docker-compose.override.yml stop

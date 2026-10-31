@@ -29,6 +29,7 @@ install_crawler() {
   pct exec "$ctid" -- env FIRECRAWL_REF="${FIRECRAWL_REF:-main}" bash -c '
     set -euo pipefail
     export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+    apt-get update
     apt-get install -y --no-install-recommends git
     if [[ ! -d /opt/shopagent-crawler/firecrawl/.git ]]; then
       git clone --depth 1 --branch "$FIRECRAWL_REF" \
