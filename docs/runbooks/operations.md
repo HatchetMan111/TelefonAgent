@@ -29,7 +29,9 @@ Kostenprüfung. Die Detail-Runbooks bleiben maßgeblich:
 
 1. Postgres erreichbar (`pg_isready`).
 2. n8n erreichbar (`http://$N8N_LAN_IP:5678/healthz`).
-3. Firecrawl erreichbar (`http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/test`).
+3. Firecrawl erreichbar (`http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/test`) –
+   **nur im Crawl-Fenster 02:50 bis 04:00**. Außerhalb dieses Fensters wird
+   der Check übersprungen, weil der Crawler-Stack planmäßig gestoppt ist.
 4. Produktdaten nicht älter als 36 Stunden (`max(last_seen_at)`).
 5. Aktive Produktzahl nicht unter 80 % des letzten bekannten Werts
    (Zustand in `${XDG_STATE_HOME:-$HOME/.local/state}/shopagent/product-count`,
@@ -48,9 +50,11 @@ Aufruf:
 ./scripts/healthcheck.sh; echo "exit=$?"
 ```
 
-Das Skript braucht `.env` im Repo-Wurzelverzeichnis. Regelmäßig (z. B. per
-Cron auf dem Admin-Rechner) laufen lassen; ein `FAIL`-Eintrag ist ein
-Alarm, kein stiller Logeintrag.
+Das Skript braucht `.env` im Repo-Wurzelverzeichnis. Es kann regelmäßig (z. B.
+per Cron auf dem Admin-Rechner) laufen; außerhalb des Crawl-Fensters löst der
+gestoppte Firecrawl-Stack keinen Dauer-Alarm aus, weil der Firecrawl-Check nur
+zwischen 02:50 und 04:00 aktiv ist. Ein `FAIL`-Eintrag ist ein Alarm, kein
+stiller Logeintrag.
 
 ### n8n-Fehlerworkflow importieren und verknüpfen
 
@@ -304,7 +308,7 @@ sein.
 |---|---|
 | `FAIL: postgres` | `pct exec "$DB_CT" -- systemctl status postgresql`; `DB_HOST`/`DB_PORT` in `.env` |
 | `FAIL: n8n` | n8n-Container im n8n-LXC (`docker compose ps`), Unit/Logs prüfen |
-| `FAIL: firecrawl` | Crawler-Stack läuft nur im Fenster 02:50–04:00; außerhalb manuell starten |
+| `FAIL: firecrawl` | Tritt nur zwischen 02:50 und 04:00 auf; Crawler-Stack im Fenster starten/prüfen (außerhalb wird der Check übersprungen) |
 | `FAIL: produktdaten ...` | Letzten `crawl_runs`-Eintrag und Firecrawl-Log prüfen; Re-Crawl |
 | `FAIL: produktzahl sinkt` | Crawl auf Teilausfall prüfen; `crawl_runs.errors` und Firecrawl-Antworten |
 | `FAIL: tunnel/auth` | Tunnel-Status und n8n-Workflow-Aktivierung; `docs/runbooks/tunnel.md` |

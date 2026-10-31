@@ -7,7 +7,10 @@ note() { echo "FAIL: $*" >&2; FAIL=1; }
 
 pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" >/dev/null || note "postgres"
 curl -fsS "http://$N8N_LAN_IP:5678/healthz" >/dev/null || note "n8n"
-curl -fsS "http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/test" >/dev/null || note "firecrawl"
+HHMM="$(date +%H%M)"
+if [[ ! "$HHMM" < "0250" ]] && [[ "$HHMM" < "0400" ]]; then
+  curl -fsS "http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/test" >/dev/null || note "firecrawl"
+fi
 
 if ! FRESH="$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc \
   "select coalesce(max(last_seen_at) > now() - interval '36 hours', false) from products;")"; then
@@ -27,7 +30,8 @@ fi
 [[ "$COUNT" =~ ^[0-9]+$ ]] && echo "$COUNT" > "$STATE_DIR/product-count"
 
 CODE="$(curl -s -o /dev/null -w '%{http_code}' "https://$TUNNEL_HOST/webhook/shopagent/search" \
-  -X POST -H 'Content-Type: application/json' -d '{}')"
+  -X POST -H 'Content-Type: application/json' -d '{}' || true)"
+CODE="${CODE:-000}"
 [[ "$CODE" == "401" ]] || note "tunnel/auth (HTTP $CODE)"
 
 if [[ "$FAIL" -ne 0 ]]; then
