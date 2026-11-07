@@ -4,6 +4,7 @@
     "name": "get_product",
     "description": "Liefert Details zu genau einem Produkt. Nutze es, wenn der Anrufer einen konkreten Produktnamen oder eine SKU nennt.",
     "response_timeout_secs": 10,
+    "pre_tool_speech": "force",
     "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/product",
       "method": "POST",

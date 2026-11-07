@@ -4,6 +4,7 @@
     "name": "get_shop_info",
     "description": "Liefert Shop-Informationen zu Öffnungszeiten, Versand, Lieferzeit, Rückgabe, Zahlung oder Kontakt.",
     "response_timeout_secs": 10,
+    "pre_tool_speech": "force",
     "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/info",
       "method": "POST",

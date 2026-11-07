@@ -4,6 +4,7 @@
     "name": "handoff_to_human",
     "description": "Protokolliert die Übergabe an einen Menschen. Die eigentliche Weiterleitung macht das native Transfer-Tool.",
     "response_timeout_secs": 10,
+    "pre_tool_speech": "force",
     "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/handoff",
       "method": "POST",

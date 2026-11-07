@@ -1,12 +1,28 @@
 'use strict';
 
-const ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&nbsp;': ' ' };
+const ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  auml: 'ä', ouml: 'ö', uuml: 'ü', szlig: 'ß',
+  Auml: 'Ä', Ouml: 'Ö', Uuml: 'Ü',
+  euro: '€', deg: '°', times: '×',
+  copy: '©', reg: '®', trade: '™',
+  mdash: '—', ndash: '–', hellip: '…'
+};
+
+// Ungültige Codepoints (z. B. > 0x10FFFF, Surrogate) lassen String.fromCodePoint
+// werfen bzw. erzeugen UTF-8, das Postgres jsonb ablehnt – Originaltext behalten.
+function safeCodePoint(n, original) {
+  if (Number.isInteger(n) && n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff)) {
+    return String.fromCodePoint(n);
+  }
+  return original;
+}
 
 function decodeEntities(s = '') {
   return String(s)
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
-    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ENTITIES[m] ?? m);
+    .replace(/&#x([0-9a-f]+);/gi, (m, h) => safeCodePoint(parseInt(h, 16), m))
+    .replace(/&#(\d+);/g, (m, d) => safeCodePoint(parseInt(d, 10), m))
+    .replace(/&([a-z][a-z0-9]*);/gi, (m, name) => ENTITIES[name] ?? m);
 }
 
 function stripTags(s = '') {
@@ -83,14 +99,19 @@ function findProduct(node) {
 
 function pickOffer(product) {
   const offers = Array.isArray(product.offers) ? product.offers : [product.offers];
-  const first = offers.find(Boolean) ?? {};
+  // Erstes Angebot MIT Preis nehmen – Offer-Arrays können vorab nur
+  // availability-Einträge enthalten. Die Verfügbarkeit ggf. separat aus dem
+  // ersten Angebot mit availability-Feld übernehmen.
+  const priced = offers.find((o) => o && (o.price != null || o.lowPrice != null));
+  const first = priced ?? offers.find(Boolean) ?? {};
+  const withAvailability = offers.find((o) => o && o.availability != null) ?? first;
   const low = first.lowPrice ?? first.price;
   const high = first.highPrice ?? first.price;
   return {
     priceCents: parsePriceCents(low),
     highCents: parsePriceCents(high),
     currency: first.priceCurrency ?? 'EUR',
-    availability: mapAvailability(first.availability)
+    availability: mapAvailability(withAvailability.availability)
   };
 }
 
@@ -99,6 +120,17 @@ function slugFromUrl(url) {
     const p = new URL(url).pathname.replace(/\/+$/, '');
     return p.split('/').filter(Boolean).pop() ?? null;
   } catch { return null; }
+}
+
+// Relative Bild-URLs (häufig "/img/x.jpg") gegen die Seiten-URL auflösen.
+function resolveUrl(value, base) {
+  const raw = typeof value === 'string' ? value : value?.url;
+  if (typeof raw !== 'string' || !raw) return null;
+  try {
+    return new URL(raw, base).href;
+  } catch {
+    return raw;
+  }
 }
 
 function extractProduct(html, url) {
@@ -123,7 +155,7 @@ function extractProduct(html, url) {
     category: category ? stripTags(category) : null,
     brand: brand ? stripTags(brand) : null,
     attributes,
-    image_url: typeof image === 'string' ? image : image?.url ?? null,
+    image_url: resolveUrl(image, url),
     product_url: url
   };
 }
@@ -152,5 +184,6 @@ function normalizeProduct(raw, url) {
 
 module.exports = {
   decodeEntities, stripTags, parsePriceCents, mapAvailability,
-  extractJsonLd, findProduct, pickOffer, slugFromUrl, extractProduct, normalizeProduct
+  extractJsonLd, findProduct, pickOffer, slugFromUrl, resolveUrl,
+  extractProduct, normalizeProduct
 };

@@ -1,14 +1,12 @@
+# Firecrawl-Override für den Crawler-LXC.
+#
+# Basis: firecrawl/docker-compose.yaml. Seit 2026 gibt es keinen eigenen
+# worker-Service mehr – der Worker läuft im api-Container (harness.js).
+# Kein Port-Override: n8n im eigenen LXC erreicht Firecrawl über <LXC-IP>:3002,
+# daher bleibt die Basis-Bindung (0.0.0.0) bestehen.
 services:
   api:
-    ports:
-      - "3002:3002"
-    environment:
-      PORT: 3002
-      HOST: 0.0.0.0
-      USE_DB_AUTHENTICATION: "false"
-  worker:
     environment:
       USE_DB_AUTHENTICATION: "false"
-      NUM_WORKERS_PER_QUEUE: "2"
   playwright-service:
     shm_size: "1gb"

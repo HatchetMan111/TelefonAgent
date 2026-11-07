@@ -29,7 +29,7 @@ Kostenprüfung. Die Detail-Runbooks bleiben maßgeblich:
 
 1. Postgres erreichbar (`pg_isready`).
 2. n8n erreichbar (`http://$N8N_LAN_IP:5678/healthz`).
-3. Firecrawl erreichbar (`http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/test`) –
+3. Firecrawl erreichbar (`http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/health/liveness`) –
    **nur im Crawl-Fenster 02:50 bis 04:00**. Außerhalb dieses Fensters wird
    der Check übersprungen, weil der Crawler-Stack planmäßig gestoppt ist.
 4. Produktdaten nicht älter als 36 Stunden (`max(last_seen_at)`).
@@ -38,8 +38,9 @@ Kostenprüfung. Die Detail-Runbooks bleiben maßgeblich:
 6. Aktive Produktzahl nicht unter 80 % des letzten bekannten Werts
    (Zustand in `${XDG_STATE_HOME:-$HOME/.local/state}/shopagent/product-count`,
    überschreibbar mit `STATE_DIR`).
-7. Tunnel und Auth-Pfad: `POST https://$TUNNEL_HOST/webhook/shopagent/search`
-   ohne Secret muss `401` liefern.
+7. Auth-Pfad: `POST <Ziel>/webhook/shopagent/search` ohne Secret muss `401`
+   liefern. Ziel ist `https://$TUNNEL_HOST`; wenn `TUNNEL_HOST` leer ist
+   (lokal ohne Tunnel), wird `http://$N8N_LAN_IP:5678` geprüft.
 
 Jeder Fehler setzt `FAIL=1`, wird als `FAIL: ...` auf stderr gemeldet und am
 Ende per `POST` an `NTFY_URL` alarmiert. Exit-Code `0` nur bei `HEALTH OK`,
@@ -91,7 +92,7 @@ starten:
 ```bash
 CRAWLER_CT="$(pct list | awk '/shopagent-crawler/{print $1}')"
 pct exec "$CRAWLER_CT" -- systemctl start shopagent-crawler.service
-pct exec "$CRAWLER_CT" -- curl -fsS http://127.0.0.1:3002/test >/dev/null && echo "firecrawl ok"
+pct exec "$CRAWLER_CT" -- curl -fsS http://127.0.0.1:3002/health/liveness >/dev/null && echo "firecrawl ok"
 ```
 
 Dann im n8n-UI **ShopAgent Crawl** öffnen → **Execute Workflow**. Der Workflow
@@ -287,7 +288,7 @@ Images und Firecrawl-Ref sind in `.env` gepinnt (`FIRECRAWL_REF`,
 3. Erreichbarkeit prüfen:
 
    ```bash
-   pct exec "$CRAWLER_CT" -- curl -fsS http://127.0.0.1:3002/test >/dev/null && echo "firecrawl ok"
+   pct exec "$CRAWLER_CT" -- curl -fsS http://127.0.0.1:3002/health/liveness >/dev/null && echo "firecrawl ok"
    ```
 
 4. Manuellen Re-Crawl ausführen und `crawl_runs` prüfen. Schlägt der neue
@@ -307,13 +308,11 @@ Monatlich (bzw. am Monatsanfang) prüfen:
      | jq '{character_count, character_limit, next_character_count_reset_unix}'
    ```
 
-   Zusätzlich die Gesprächsminuten aus der DB schätzen:
-
-   ```bash
-   set -a; source .env; set +a
-   DB_CT="$(pct list | awk '/shopagent-db/{print $1}')"
-   pct exec "$DB_CT" -- bash -c "PGPASSWORD='$DB_ADMIN_PASSWORD' psql -h 127.0.0.1 -p 54322 -U '$DB_ADMIN_USER' -d postgres -c \"select count(*) as calls, round(coalesce(sum(duration_sec),0)/60.0, 1) as minutes from calls where started_at >= date_trunc('month', now());\""
-   ```
+   Die Tabelle `calls` im Schema bleibt derzeit unbeschrieben – kein Workflow
+   schreibt Post-Call-Daten hinein. Die Gesprächsminuten daher im
+   ElevenLabs-Dashboard (Conversations/Usage) ablesen, nicht aus der DB.
+   Wer sie automatisch haben will, richtet den ElevenLabs Post-Call-Webhook
+   ein und ergänzt einen Insert in `calls`.
 
    Faustwert: 0,08–0,10 USD pro Minute. Bei unerwartetem Anstieg zuerst
    Prompt/Tool-Schleifen und die Eval-Fälle prüfen, dann das Minuten-Budget
@@ -339,7 +338,7 @@ sein.
 | `FAIL: produktdaten ...` | Letzten `crawl_runs`-Eintrag und Firecrawl-Log prüfen; Re-Crawl |
 | `FAIL: letzter Crawl: ...` | `crawl_runs.errors` und Firecrawl-Antworten prüfen; Re-Crawl starten |
 | `FAIL: produktzahl sinkt` | Crawl auf Teilausfall prüfen; `crawl_runs.errors` und Firecrawl-Antworten |
-| `FAIL: tunnel/auth` | Tunnel-Status und n8n-Workflow-Aktivierung; `docs/runbooks/tunnel.md` |
+| `FAIL: webhook/auth` | Ohne `TUNNEL_HOST`: n8n-Workflow-Aktivierung prüfen (Workflow muss aktiv sein, sonst 404). Mit Tunnel: Tunnel-Status; `docs/runbooks/tunnel.md` |
 
 Der Healthcheck fasst mehrere Fehler zusammen und alarmiert einmal pro Lauf.
 Nach der Behebung erneut ausführen, bis `HEALTH OK` erscheint.

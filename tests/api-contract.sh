@@ -29,6 +29,6 @@ echo "OK unknown action"
 check search '{"query":"Regenschuh"}' '"products"' '"as_of"' '"price_eur"'
 check product '{"sku":"REGEN-42"}' '"product"' '"variants"' '"price_eur"'
 check info '{"topic":"oeffnungszeiten"}' '"answer"' '"source_url"' '"as_of"'
-check callback '{"name":"Max","phone":"+491701234567","reason":"Test"}' '"reference"'
-check handoff '{"reason":"Test"}' '"action"'
+check callback '{"name":"Max","phone":"+491701234567","reason":"sonstiges"}' '"reference"'
+check handoff '{"reason":"sonstiges"}' '"action"'
 echo "API-CONTRACT OK"

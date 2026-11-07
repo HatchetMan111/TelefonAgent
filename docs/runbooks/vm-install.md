@@ -31,25 +31,35 @@ Am Ende werden VM-ID, IP, n8n-URL und Root-Passwort ausgegeben.
 |---|---|---|
 | n8n-UI/Webhooks | 5678/tcp | LAN |
 | PostgreSQL | 5432/tcp | nur `127.0.0.1` |
-| Firecrawl | 3002/tcp | nur Docker-Netz |
+| Firecrawl | 3002/tcp | nur `127.0.0.1` (Host-lokal) + Docker-Netz |
 
-Firecrawl wird nicht auf dem Host veröffentlicht; n8n erreicht es als
-`http://api:3002`.
+Firecrawl ist auf dem Host nur an `127.0.0.1` gebunden (Healthcheck); n8n
+erreicht es im Docker-Netz als `http://api:3002`.
 
 ## Nach der Installation
 
 1. `http://<VM-IP>:5678` öffnen und n8n-Owner anlegen.
 2. Workflows `01-crawl.json`, `02-agent-api.json`, `03-error-alert.json`
    importieren.
-3. Postgres-Credential `ShopAgent DB` anlegen:
+3. In **ShopAgent Crawl** und **ShopAgent API** unter Settings → Error
+   Workflow **ShopAgent Error Alert** verknüpfen (die Importdateien enthalten
+   bewusst keine Workflow-ID).
+4. **ShopAgent Crawl** aktivieren (nachtlauf) und **ShopAgent API** aktivieren
+   (sonst antwortet der Webhook mit 404).
+5. Postgres-Credential `ShopAgent DB` anlegen:
    - Host `postgres`
    - Port `5432`
    - DB `postgres`
    - User `shopagent`
    - Passwort aus `/opt/telefonagent/.env`
-4. Cloudflare-Tunnel, ElevenLabs-Agent und SIP-Trunk nach den jeweiligen
+6. Cloudflare-Tunnel, ElevenLabs-Agent und SIP-Trunk nach den jeweiligen
    Runbooks einrichten.
-5. Go-live-Checkliste abarbeiten.
+7. Go-live-Checkliste abarbeiten.
+
+Hinweis: SQL-Migrationen sind in der VM bereits eingebunden (Postgres-Init,
+siehe `vm/docker-compose.yml`). Nach einem Schema-Update zusätzlich
+`psql -h 127.0.0.1 -U shopagent -d postgres -f supabase/migrations/<neu>.sql`
+ausführen (`postgresql-client` ist installiert).
 
 ## Reboot-Test
 

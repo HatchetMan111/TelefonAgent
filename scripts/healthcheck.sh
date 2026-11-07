@@ -9,7 +9,7 @@ pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" >/dev/null || note "postgre
 curl -fsS "http://$N8N_LAN_IP:5678/healthz" >/dev/null || note "n8n"
 HHMM="$(TZ=Europe/Berlin date +%H%M)"
 if [[ ! "$HHMM" < "0250" ]] && [[ "$HHMM" < "0400" ]]; then
-  curl -fsS "http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/test" >/dev/null || note "firecrawl"
+  curl -fsS "http://$FIRECRAWL_HOST:$FIRECRAWL_PORT/health/liveness" >/dev/null || note "firecrawl"
 fi
 
 if ! FRESH="$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -tAc \
@@ -46,10 +46,15 @@ if [[ "$PREV" =~ ^[0-9]+$ && "$COUNT" =~ ^[0-9]+$ && "$PREV" -gt 0 && "$COUNT" -
 fi
 [[ "$COUNT" =~ ^[0-9]+$ ]] && echo "$COUNT" > "$STATE_DIR/product-count"
 
-CODE="$(curl -s -o /dev/null -w '%{http_code}' "https://$TUNNEL_HOST/webhook/shopagent/search" \
+# Ohne Tunnel lokal gegen n8n prüfen (401 ohne Secret = Auth aktiv, Workflow aktiv)
+CHECK_TARGET="https://$TUNNEL_HOST"
+if [[ -z "${TUNNEL_HOST:-}" ]]; then
+  CHECK_TARGET="http://$N8N_LAN_IP:5678"
+fi
+CODE="$(curl -s -o /dev/null -w '%{http_code}' "$CHECK_TARGET/webhook/shopagent/search" \
   -X POST -H 'Content-Type: application/json' -d '{}' || true)"
 CODE="${CODE:-000}"
-[[ "$CODE" == "401" ]] || note "tunnel/auth (HTTP $CODE)"
+[[ "$CODE" == "401" ]] || note "webhook/auth (HTTP $CODE)"
 
 if [[ "$FAIL" -ne 0 ]]; then
   curl -fsS -d "ShopAgent Healthcheck fehlgeschlagen auf $(hostname)" "$NTFY_URL" >/dev/null || true

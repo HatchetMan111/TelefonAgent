@@ -214,10 +214,18 @@ IMAGE_PATH="$IMAGE_DIR/debian-13-genericcloud-amd64.qcow2"
 
 ensure_image() {
   mkdir -p "$IMAGE_DIR"
-  if [[ ! -f "$IMAGE_PATH" ]]; then
-    log "Debian-13-Cloud-Image herunterladen"
-    wget -q --show-progress -O "$IMAGE_PATH" "$IMAGE_URL"
+  if [[ -f "$IMAGE_PATH" ]]; then
+    return 0
   fi
+  log "Debian-13-Cloud-Image herunterladen"
+  # In Tempdatei laden und atomar verschieben, damit ein abgebrochener
+  # Download keine korrupte Datei hinterlässt, die beim nächsten Lauf importiert wird.
+  if ! wget -q --show-progress -O "$IMAGE_PATH.part" "$IMAGE_URL"; then
+    rm -f "$IMAGE_PATH.part"
+    err "Image-Download fehlgeschlagen – bitte den Installer erneut starten."
+    exit 1
+  fi
+  mv "$IMAGE_PATH.part" "$IMAGE_PATH"
 }
 
 ensure_disk() {
@@ -299,9 +307,10 @@ for iface in data:
 
 arp_ip() {
   local mac
-  mac="$(qm config "$VMID" | awk -F'[ ,]' '/^net0:/{for(i=1;i<=NF;i++) if($i ~ /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/){print $i; exit}}')"
+  # qm config liefert die MAC als "net0: virtio=BC:24:11:...,bridge=..." – Modell-Präfix strippen.
+  mac="$(qm config "$VMID" 2>/dev/null | awk -F'[ ,]' '/^net0:/{for(i=1;i<=NF;i++){m=$i; sub(/^[^=]*=/,"",m); if(m ~ /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/){print m; exit}}}' || true)"
   [[ -n "$mac" ]] || return 0
-  ip neigh show dev "$BRIDGE" 2>/dev/null | awk -v m="$mac" 'tolower($0) ~ tolower(m) {print $1; exit}'
+  ip neigh show dev "$BRIDGE" 2>/dev/null | awk -v m="$mac" 'tolower($0) ~ tolower(m) {print $1; exit}' || true
 }
 
 log "Warte auf SSH in der VM"
@@ -314,7 +323,11 @@ for _ in $(seq 1 90); do
   fi
   sleep 2
 done
-[[ -n "$VM_IP" ]] || { err "Keine SSH-IP gefunden. VM läuft evtl.; mit --ip <IP> erneut starten."; exit 1; }
+[[ -n "$VM_IP" ]] || {
+  err "Keine SSH-IP gefunden (180s gewartet)."
+  err "Hinweise: IP in der VM prüfen (qm terminal/$VMID oder DHCP-Leases) und dann mit --ip <IP> erneut starten."
+  exit 1
+}
 ok "VM erreichbar: $VM_IP"
 
 log "Basiswerkzeuge im Gast installieren"
@@ -337,7 +350,7 @@ trap 'rm -f "${TMP_ENV:-}"' EXIT
   printf "SHOP_PRODUCT_PATTERN='/(produkt|product|p)/'\n"
   printf 'SHOP_INFO_PATHS=%s\n' "$SHOP_INFO_PATHS"
   printf 'HUMAN_TRANSFER_NUMBER=%s\n' "$HUMAN_TRANSFER_NUMBER"
-  printf 'DB_HOST=127.0.0.1\nDB_PORT=5432\nDB_NAME=postgres\nDB_USER=shopagent\n'
+  printf 'DB_HOST=127.0.0.1\nDB_PORT=5432\nDB_USER=shopagent\n'
   printf 'DB_PASSWORD=%s\nDB_ADMIN_USER=shopagent\nDB_ADMIN_PASSWORD=%s\n' "$DB_PASSWORD" "$DB_PASSWORD"
   printf 'N8N_DB_NAME=n8n\n'
   printf 'N8N_LAN_IP=%s\n' "$VM_IP"

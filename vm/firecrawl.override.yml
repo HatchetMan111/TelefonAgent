@@ -1,16 +1,17 @@
+# Firecrawl-Override für die Telefonagent-VM.
+#
+# Basis: firecrawl/docker-compose.yaml. Seit 2026 gibt es keinen eigenen
+# worker-Service mehr – der Worker läuft im api-Container (harness.js).
+# Deshalb patchen wir nur noch api (Self-Host ohne Supabase) und binden die
+# API host-lokal: n8n erreicht Firecrawl über das gemeinsame Docker-Netz
+# (http://api:3002), der Healthcheck auf der VM über 127.0.0.1:3002.
+# `!override` ersetzt das ports-Mapping der Basis komplett (0.0.0.0 -> 127.0.0.1).
 services:
   api:
-    ports:
+    ports: !override
       - "127.0.0.1:3002:3002"
     environment:
-      PORT: 3002
-      HOST: 0.0.0.0
       USE_DB_AUTHENTICATION: "false"
-      MAX_RAM: "0.8"
-  worker:
-    environment:
-      USE_DB_AUTHENTICATION: "false"
-      NUM_WORKERS_PER_QUEUE: "2"
   playwright-service:
     shm_size: "1gb"
 

@@ -27,6 +27,9 @@ verpflichtend.
 - [ ] Telefonie: 5 echte Anrufe, Übergabe an Menschen funktioniert
 - [ ] Sicherheit: Webhook ohne Secret 401, Supabase/n8n-UI/Firecrawl nicht öffentlich
 - [ ] Backup: Restore getestet, Alarm getestet
+- [ ] Alarm-Verkabelung: Error-Workflow **ShopAgent Error Alert** in ShopAgent
+      Crawl **und** ShopAgent API verknüpft (Settings → Error Workflow), ein
+      Testfehler kommt im ntfy-Topic an
 - [ ] Recht: KI-Offenlegung, Aufzeichnung aus, Callback-Löschfrist 30 Tage per Backup-Purge implementiert
 - [ ] Runbooks vorhanden: crawl, tunnel, sip, eval, backup, operations
 
@@ -40,7 +43,7 @@ verpflichtend.
 | KI-Offenlegung und Preise | Baseline-Fall `ai` grün; Preisantworten nennen `as_of` und „Preis im Shop ist verbindlich“ | `elevenlabs/prompt.md` |
 | Telefonie | 5 dokumentierte echte Anrufe inkl. mindestens einer Übergabe an einen Menschen | `docs/runbooks/sip.md` |
 | Sicherheit | `tests/api-contract.sh` `OK auth`; von außen kein Zugriff auf Supabase, n8n-UI, Firecrawl | `docs/runbooks/tunnel.md` |
-| Backup und Alarm | Scratch-Restore erfolgreich; Testalarm im ntfy-Topic angekommen | `docs/runbooks/backup.md`, `docs/runbooks/operations.md` |
+| Backup und Alarm | Scratch-Restore erfolgreich; Testalarm im ntfy-Topic angekommen; Settings beider Workflows zeigen auf **ShopAgent Error Alert** | `docs/runbooks/backup.md`, `docs/runbooks/operations.md` |
 | Recht | Prompt enthält KI-Offenlegung; Aufzeichnung aus; Callback-Löschfrist 30 Tage per Backup-Purge implementiert und im Runbook dokumentiert | `elevenlabs/prompt.md`, `scripts/backup.sh`, `docs/runbooks/operations.md` |
 
 ## Blockierte Live-Checkpoints

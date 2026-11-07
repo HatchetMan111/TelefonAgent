@@ -2,6 +2,21 @@
   "name": "ShopAgent Error Alert",
   "nodes": [
     {
+      "parameters": {
+        "content": "## ShopAgent Error Alert\n⚠️ Wird NICHT automatisch aktiv: In **ShopAgent Crawl** und **ShopAgent API** unter Settings → Error Workflow diesen Workflow wählen.\n\nBenötigt `NTFY_URL` als Env im n8n-Container. Schlägt das Senden fehl (z. B. ntfy nicht erreichbar), wird der Fehler ignoriert, statt eine Fehlerkette auszulösen.",
+        "height": 300,
+        "width": 620
+      },
+      "id": "error-alert-note",
+      "name": "Sticky Aktivierung",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -280
+      ]
+    },
+    {
       "parameters": {},
       "id": "error-alert-trigger",
       "name": "Error Trigger",
@@ -23,13 +38,14 @@
         "options": {}
       },
       "id": "error-alert-http",
-      "name": "ntfy",
+      "name": "ntfy-Benachrichtigung senden",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         220,
         0
-      ]
+      ],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -37,7 +53,7 @@
       "main": [
         [
           {
-            "node": "ntfy",
+            "node": "ntfy-Benachrichtigung senden",
             "type": "main",
             "index": 0
           }
@@ -52,5 +68,9 @@
   "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": false
-  }
+  },
+  "tags": [
+    "shopagent",
+    "alarm"
+  ]
 }

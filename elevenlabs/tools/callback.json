@@ -4,6 +4,7 @@
     "name": "create_callback",
     "description": "Notiert einen Rückrufwunsch mit Name, Telefonnummer und Grund.",
     "response_timeout_secs": 10,
+    "pre_tool_speech": "force",
     "api_schema": {
       "url": "https://TUNNEL_HOST/webhook/shopagent/callback",
       "method": "POST",

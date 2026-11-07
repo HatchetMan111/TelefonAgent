@@ -3,6 +3,66 @@
   "nodes": [
     {
       "parameters": {
+        "content": "## ShopAgent API\nÖffentliche Agent-API für die ElevenLabs-Tools: `POST /webhook/shopagent/:action` (search · product · info · callback · handoff).\n\nAuth: Bearer `AGENT_WEBHOOK_SECRET` · Credential: **ShopAgent DB**.\n\n⚠️ Der Workflow muss **AKTIV** sein, sonst antwortet der Tunnel mit 404. Error Workflow **ShopAgent Error Alert** in den Settings verknüpfen.",
+        "height": 260,
+        "width": 940
+      },
+      "id": "agent-api-note-title",
+      "name": "Sticky Titel",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Eingang & Auth\nWebhook nimmt POST /webhook/shopagent/:action entgegen; Auth ok? prüft den Bearer gegen AGENT_WEBHOOK_SECRET, ohne Token antwortet 401 Unauthorized.",
+        "height": 420,
+        "width": 640
+      },
+      "id": "agent-api-note-auth",
+      "name": "Sticky Eingang & Auth",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Routing\nRoute liest die Aktion, Bad action? fängt Unbekanntes ab (404 Unbekannte Aktion), Aktion verzweigen verteilt auf die fünf Tool-Handler.",
+        "height": 420,
+        "width": 440
+      },
+      "id": "agent-api-note-routing",
+      "name": "Sticky Routing",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        620,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Tool-Handler\nJe Aktion ein Postgres-Call (Credential „ShopAgent DB“):\n**search** → search_products · **product** → Produktdetails · **info** → pages nach topic · **callback** → insert in callbacks · **handoff** → Transfer protokollieren.\n\n„Antwort formen“ baut die JSON-Antwort für ElevenLabs, „200 Antwort senden“ schickt sie.",
+        "height": 840,
+        "width": 700
+      },
+      "id": "agent-api-note-tools",
+      "name": "Sticky Tool-Handler",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        -400
+      ]
+    },
+    {
+      "parameters": {
         "httpMethod": "POST",
         "path": "shopagent/:action",
         "responseMode": "responseNode",
@@ -61,7 +121,7 @@
         }
       },
       "id": "agent-api-401",
-      "name": "401",
+      "name": "401 Unauthorized",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -126,7 +186,7 @@
         }
       },
       "id": "agent-api-404",
-      "name": "404",
+      "name": "404 Unbekannte Aktion",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -263,7 +323,7 @@
         "options": {}
       },
       "id": "agent-api-switch",
-      "name": "Switch",
+      "name": "Aktion verzweigen",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
@@ -398,7 +458,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const action = $('Route').first().json.action;\nif ($json.error) {\n  return [{ json: { ok: false, message: 'Die Daten sind gerade nicht erreichbar.' } }];\n}\nconst row = $json.result ?? $json;\nif (row == null || (typeof row === 'object' && Object.keys(row).length === 0)) {\n  return [{ json: { ok: false, message: 'Dazu habe ich gerade keine Information.' } }];\n}\nif (action === 'callback') {\n  return [{ json: { ok: true, reference: String(row.id).slice(0, 8) } }];\n}\nreturn [{ json: row }];",
+        "jsCode": "const action = $('Route').first().json.action;\nif ($json.error) {\n  return [{ json: { ok: false, message: 'Die Daten sind gerade nicht erreichbar.' } }];\n}\nconst row = $json.result ?? $json;\nif (row == null || (typeof row === 'object' && Object.keys(row).length === 0)) {\n  return [{ json: { ok: false, message: 'Dazu habe ich gerade keine Information.' } }];\n}\nif (action === 'callback') {\n  if (row.id == null) return [{ json: { ok: false, message: 'Der Rückruf konnte gerade nicht notiert werden.' } }];\n  return [{ json: { ok: true, reference: String(row.id).slice(0, 8) } }];\n}\nreturn [{ json: row }];",
         "mode": "runOnceForAllItems"
       },
       "id": "agent-api-format",
@@ -419,7 +479,7 @@
         }
       },
       "id": "agent-api-200",
-      "name": "200",
+      "name": "200 Antwort senden",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
@@ -451,7 +511,7 @@
         ],
         [
           {
-            "node": "401",
+            "node": "401 Unauthorized",
             "type": "main",
             "index": 0
           }
@@ -473,21 +533,21 @@
       "main": [
         [
           {
-            "node": "404",
+            "node": "404 Unbekannte Aktion",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Switch",
+            "node": "Aktion verzweigen",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Switch": {
+    "Aktion verzweigen": {
       "main": [
         [
           {
@@ -585,7 +645,7 @@
       "main": [
         [
           {
-            "node": "200",
+            "node": "200 Antwort senden",
             "type": "main",
             "index": 0
           }
@@ -600,5 +660,9 @@
   "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": false
-  }
+  },
+  "tags": [
+    "shopagent",
+    "api"
+  ]
 }

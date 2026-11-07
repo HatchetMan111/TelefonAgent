@@ -42,6 +42,10 @@ install_crawler() {
   pct exec "$ctid" -- chmod 600 /opt/shopagent-crawler/firecrawl.env
   pct exec "$ctid" -- env BULL_AUTH_KEY="${FIRECRAWL_BULL_AUTH_KEY}" bash -c '
     set -euo pipefail
+    [[ "$BULL_AUTH_KEY" =~ ^[A-Za-z0-9_-]+$ ]] || {
+      echo "FIRECRAWL_BULL_AUTH_KEY enthält Sonderzeichen – bitte nur A-Z, a-z, 0-9, _ und - verwenden." >&2
+      exit 1
+    }
     cd /opt/shopagent-crawler
     cp firecrawl/.env.example firecrawl/.env 2>/dev/null || true
     cp firecrawl.env firecrawl/.env
@@ -50,10 +54,10 @@ install_crawler() {
     docker compose -f firecrawl/docker-compose.yaml -f docker-compose.override.yml pull
     docker compose -f firecrawl/docker-compose.yaml -f docker-compose.override.yml up -d
     for i in $(seq 1 60); do
-      curl -fsS http://127.0.0.1:3002/test >/dev/null 2>&1 && break
+      curl -fsS http://127.0.0.1:3002/health/liveness >/dev/null 2>&1 && break
       sleep 3
     done
-    curl -fsS http://127.0.0.1:3002/test
+    curl -fsS http://127.0.0.1:3002/health/liveness >/dev/null
   '
 
   for unit in shopagent-crawler.service shopagent-crawler.timer \
@@ -65,5 +69,5 @@ install_crawler() {
     systemctl enable --now shopagent-crawler.timer shopagent-crawler-stop.timer
   '
 
-  msg_ok "Firecrawl läuft: http://$ip:3002/test"
+  msg_ok "Firecrawl läuft: http://$ip:3002 (Health: /health/liveness)"
 }

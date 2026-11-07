@@ -26,40 +26,45 @@ test('buildToolPayload ersetzt Tunnel und Secret', () => {
 test('buildAgentPayload ersetzt Variablen und Transfer-Nummer', () => {
   process.env.SHOP_NAME = 'Testshop';
   process.env.HUMAN_TRANSFER_NUMBER = '+4915112345678';
-  const agent = {
-    conversation_config: {
-      agent: {
-        first_message: 'Hallo {{shop_name}}',
-        prompt: {
-          prompt: '',
-          built_in_tools: {
-            transfer_to_number: {
-              params: {
-                transfers: [{
-                  transfer_destination: { type: 'phone', phone_number: 'HUMAN_TRANSFER_NUMBER' },
-                  condition: 'Beschwerde'
-                }]
+  try {
+    const agent = {
+      conversation_config: {
+        agent: {
+          first_message: 'Hallo {{shop_name}}',
+          prompt: {
+            prompt: '',
+            built_in_tools: {
+              transfer_to_number: {
+                params: {
+                  transfers: [{
+                    transfer_destination: { type: 'phone', phone_number: 'HUMAN_TRANSFER_NUMBER' },
+                    condition: 'Beschwerde'
+                  }]
+                }
               }
             }
           }
-        }
-      },
-      tts: { voice_id: 'alt' }
-    }
-  };
-  const out = buildAgentPayload(agent, 'Prompt');
-  assert.equal(out.conversation_config.agent.first_message, 'Hallo Testshop');
-  assert.equal(out.conversation_config.agent.prompt.prompt, 'Prompt');
-  assert.equal(
-    out.conversation_config.agent.prompt.built_in_tools.transfer_to_number
-      .params.transfers[0].transfer_destination.phone_number,
-    '+4915112345678'
-  );
-  assert.equal(
-    agent.conversation_config.agent.prompt.built_in_tools.transfer_to_number
-      .params.transfers[0].transfer_destination.phone_number,
-    'HUMAN_TRANSFER_NUMBER'
-  );
+        },
+        tts: { voice_id: 'alt' }
+      }
+    };
+    const out = buildAgentPayload(agent, 'Prompt');
+    assert.equal(out.conversation_config.agent.first_message, 'Hallo Testshop');
+    assert.equal(out.conversation_config.agent.prompt.prompt, 'Prompt');
+    assert.equal(
+      out.conversation_config.agent.prompt.built_in_tools.transfer_to_number
+        .params.transfers[0].transfer_destination.phone_number,
+      '+4915112345678'
+    );
+    assert.equal(
+      agent.conversation_config.agent.prompt.built_in_tools.transfer_to_number
+        .params.transfers[0].transfer_destination.phone_number,
+      'HUMAN_TRANSFER_NUMBER'
+    );
+  } finally {
+    delete process.env.SHOP_NAME;
+    delete process.env.HUMAN_TRANSFER_NUMBER;
+  }
 });
 
 test('loadEnv entfernt passende einfache und doppelte Anführungszeichen', () => {
@@ -79,6 +84,20 @@ test('loadEnv entfernt passende einfache und doppelte Anführungszeichen', () =>
     assert.equal(process.env.TEST_ENV_SINGLE, 'single value');
     assert.equal(process.env.TEST_ENV_PLAIN, 'plain value');
     assert.equal(process.env.TEST_ENV_MISMATCH, '"half');
+  } finally {
+    for (const name of names) delete process.env[name];
+    fs.rmSync(path.dirname(file), { recursive: true, force: true });
+  }
+});
+
+test('loadEnv verträgt CRLF-Zeilenenden', () => {
+  const names = ['TEST_ENV_CRLF'];
+  for (const name of names) delete process.env[name];
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'apply-agent-')), '.env');
+  fs.writeFileSync(file, 'TEST_ENV_CRLF=crlf-wert\r\n');
+  try {
+    loadEnv(file);
+    assert.equal(process.env.TEST_ENV_CRLF, 'crlf-wert');
   } finally {
     for (const name of names) delete process.env[name];
     fs.rmSync(path.dirname(file), { recursive: true, force: true });

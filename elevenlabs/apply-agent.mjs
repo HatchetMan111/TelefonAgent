@@ -9,10 +9,10 @@ const dryRun = process.argv.includes('--dry-run');
 
 function loadEnv(envPath = path.join(ROOT, '.env')) {
   if (!fs.existsSync(envPath)) return;
-  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
     const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
     if (!m || process.env[m[1]]) continue;
-    let value = m[2];
+    let value = m[2].trim();
     if (value.length >= 2 && (value[0] === '"' || value[0] === "'") && value.at(-1) === value[0]) {
       value = value.slice(1, -1);
     }

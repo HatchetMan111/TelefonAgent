@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
-  parsePriceCents, mapAvailability, extractProduct, normalizeProduct, slugFromUrl
+  parsePriceCents, mapAvailability, extractProduct, normalizeProduct, slugFromUrl,
+  decodeEntities, resolveUrl
 } = require('../n8n/code/extract-products.js');
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
@@ -57,6 +58,35 @@ test('extractProduct: AggregateOffer nimmt lowPrice und merkt die Spanne', () =>
 
 test('extractProduct: ohne JSON-LD null', () => {
   assert.equal(extractProduct(fixture('product-no-jsonld.html'), 'https://shop.example/produkt/x'), null);
+});
+
+test('extractProduct: @graph, erstes Angebot mit Preis und relative Bild-URL', () => {
+  const p = extractProduct(fixture('product-graph.html'), 'https://shop.example/produkt/baecker-schuerze');
+  assert.equal(p.sku, 'APRON-7');
+  assert.equal(p.name, 'Bäcker-Schürze');
+  assert.equal(p.description, 'Baumwollschürze für die Küche');
+  assert.equal(p.price_cents, 2990);
+  assert.equal(p.currency, 'EUR');
+  assert.equal(p.availability, 'instock');
+  assert.equal(p.image_url, 'https://shop.example/img/apron-7.jpg');
+  assert.equal(p.product_url, 'https://shop.example/produkt/baecker-schuerze');
+});
+
+test('decodeEntities: ungültige Codepoints crashen nicht, deutsche Entities werden dekodiert', () => {
+  assert.equal(decodeEntities('B&auml;cker &amp; S&ouml;hne'), 'Bäcker & Söhne');
+  assert.equal(decodeEntities('Preis: 10 &euro;'), 'Preis: 10 €');
+  assert.equal(decodeEntities('X &#x110000; Y'), 'X &#x110000; Y');
+  assert.equal(decodeEntities('A &#xD800; B'), 'A &#xD800; B');
+  assert.equal(decodeEntities('A &#55296; B'), 'A &#55296; B');
+  assert.equal(decodeEntities('unbekannt &nicht_ENTITY; bleibt'), 'unbekannt &nicht_ENTITY; bleibt');
+});
+
+test('resolveUrl: relative und absolute URLs, ohne Basis unverändert', () => {
+  assert.equal(resolveUrl('/img/x.jpg', 'https://shop.example/produkt/x'), 'https://shop.example/img/x.jpg');
+  assert.equal(resolveUrl('https://cdn.example/x.jpg', 'https://shop.example/'), 'https://cdn.example/x.jpg');
+  assert.equal(resolveUrl({ url: '/img/y.jpg' }, 'https://shop.example/'), 'https://shop.example/img/y.jpg');
+  assert.equal(resolveUrl(null, 'https://shop.example/'), null);
+  assert.equal(resolveUrl('/img/z.jpg', 'kaputt'), '/img/z.jpg');
 });
 
 test('normalizeProduct: SKU fehlt -> Slug, sonst Fehler', () => {

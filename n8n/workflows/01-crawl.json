@@ -3,6 +3,66 @@
   "nodes": [
     {
       "parameters": {
+        "content": "## ShopAgent Crawl\nNächtlicher Shop-Crawl (Cron `0 3 * * *`, Europe/Berlin).\n\n**Zweig 1 · Produkt-Loop:** Sitemap → Firecrawl (rawHtml) → JSON-LD → Tabelle `products`\n**Zweig 2 · Info-Seiten:** SHOP_INFO_PATHS → Firecrawl (markdown) → Tabelle `pages`\n\nCredential: **ShopAgent DB** · Env: `SHOP_*`, `FIRECRAWL_*` (n8n-Container).\n\n⚠️ Nach dem Import: In den Settings von diesem Workflow **und** von ShopAgent API den Error Workflow **ShopAgent Error Alert** verknüpfen – sonst bleibt jeder Alarm stumm.",
+        "height": 400,
+        "width": 1100
+      },
+      "id": "crawl-note-title",
+      "name": "Sticky Titel",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 1 · Produkt-Loop\nBatch à 5 Produkt-URLs → Firecrawl scrape (rawHtml) → JSON-LD extrahieren. Fehler landen in `crawl_runs.errors`, erfolgreiche Produkte werden upserted. Beide Rückkanten laufen zurück ins Batch (Loop).",
+        "height": 380,
+        "width": 1160
+      },
+      "id": "crawl-note-product-loop",
+      "name": "Sticky Produkt-Loop",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 2 · Info-Seiten\nLäuft nach dem Produkt-Loop (done-Ausgang des Batch): SHOP_INFO_PATHS → Firecrawl (markdown) → Thema = letzter Pfadabschnitt → `pages` upserten.",
+        "height": 420,
+        "width": 1100
+      },
+      "id": "crawl-note-info-pages",
+      "name": "Sticky Info-Seiten",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 3 · Abschluss\nProdukte ohne Treffer im Lauf deaktivieren (2 Fehlläufe → inaktiv) und Lauf-Statistik in `crawl_runs` abschließen.",
+        "height": 420,
+        "width": 760
+      },
+      "id": "crawl-note-finish",
+      "name": "Sticky Abschluss",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2180,
+        -360
+      ]
+    },
+    {
+      "parameters": {
         "rule": {
           "interval": [
             {
@@ -55,11 +115,12 @@
       "position": [
         440,
         0
-      ]
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const urls = JSON.parse($json.stdout);\nconst runId = $('Run starten').first().json.id;\nreturn urls.map((url) => ({ json: { url, run_id: runId } }));"
+        "jsCode": "const runId = $('Run starten').first().json.id;\nif ($json.error || !$json.stdout) {\n  return [{ json: { __error: $json.error?.message ?? 'Sitemap-Skript ohne Ausgabe', url: null, run_id: runId } }];\n}\nlet urls;\ntry { urls = JSON.parse($json.stdout); }\ncatch { return [{ json: { __error: 'Sitemap-Skript lieferte kein JSON', url: null, run_id: runId } }]; }\nif (!Array.isArray(urls)) return [{ json: { __error: 'Sitemap-Skript lieferte kein Array', url: null, run_id: runId } }];\nreturn urls.map((url) => ({ json: { url, run_id: runId } }));"
       },
       "id": "crawl-parse-urls",
       "name": "URLs parsen",
@@ -76,7 +137,7 @@
         "options": {}
       },
       "id": "crawl-urls",
-      "name": "URLs",
+      "name": "Batch: Produkt-URLs",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
@@ -103,27 +164,27 @@
         "options": {}
       },
       "id": "crawl-firecrawl-product",
-      "name": "Firecrawl scrape",
+      "name": "Firecrawl: Produktseite",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1100,
-        180
+        360
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "'use strict';\n\nconst ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '\"', '&#39;': \"'\", '&nbsp;': ' ' };\n\nfunction decodeEntities(s = '') {\n  return String(s)\n    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))\n    .replace(/&#(\\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))\n    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ENTITIES[m] ?? m);\n}\n\nfunction stripTags(s = '') {\n  return decodeEntities(String(s).replace(/<[^>]*>/g, ' ')).replace(/\\s+/g, ' ').trim();\n}\n\nfunction parsePriceCents(value) {\n  if (value == null) return null;\n  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value * 100);\n  const raw = String(value).trim();\n  if (!raw) return null;\n  const cleaned = raw.replace(/[^\\d,.-]/g, '');\n  if (!cleaned) return null;\n  const lastDot = cleaned.lastIndexOf('.');\n  const lastComma = cleaned.lastIndexOf(',');\n  const lastSep = Math.max(lastDot, lastComma);\n  let normalized;\n  if (lastSep !== -1 && cleaned.length - lastSep - 1 >= 1 && cleaned.length - lastSep - 1 <= 2) {\n    const dec = cleaned[lastSep];\n    const other = dec === '.' ? ',' : '.';\n    const withoutOther = cleaned.split(other).join('');\n    const idx = withoutOther.lastIndexOf(dec);\n    normalized = withoutOther.slice(0, idx) + '.' + withoutOther.slice(idx + 1);\n  } else {\n    normalized = cleaned.replace(/[.,]/g, '');\n  }\n  if (!normalized) return null;\n  const n = Number(normalized);\n  return Number.isFinite(n) ? Math.round(n * 100) : null;\n}\n\nfunction mapAvailability(value) {\n  const v = String(value ?? '').toLowerCase();\n  if (!v) return 'unknown';\n  if (/(outofstock|out_of_stock|soldout|unavailable|not available|nicht verfügbar|ausverkauft)/.test(v)) return 'outofstock';\n  if (/(preorder|backorder|vorbestellung)/.test(v)) return 'preorder';\n  if (/(instock|in_stock|available|lieferbar|auf lager)/.test(v)) return 'instock';\n  return 'unknown';\n}\n\nfunction extractJsonLd(html) {\n  const out = [];\n  const re = /<script[^>]+type=[\"']application\\/ld\\+json[\"'][^>]*>([\\s\\S]*?)<\\/script>/gi;\n  let m;\n  while ((m = re.exec(html))) {\n    try {\n      const parsed = JSON.parse(m[1].trim());\n      if (Array.isArray(parsed)) out.push(...parsed);\n      else out.push(parsed);\n    } catch { /* malformed JSON-LD ignorieren */ }\n  }\n  return out;\n}\n\nfunction findProduct(node) {\n  if (!node || typeof node !== 'object') return null;\n  const type = node['@type'];\n  const types = Array.isArray(type) ? type : [type];\n  if (types.includes('Product')) return node;\n  for (const key of ['@graph', 'itemListElement', 'mainEntity']) {\n    const child = node[key];\n    if (Array.isArray(child)) {\n      for (const c of child) {\n        const found = findProduct(c?.item ?? c);\n        if (found) return found;\n      }\n    } else if (child) {\n      const found = findProduct(child);\n      if (found) return found;\n    }\n  }\n  return null;\n}\n\nfunction pickOffer(product) {\n  const offers = Array.isArray(product.offers) ? product.offers : [product.offers];\n  const first = offers.find(Boolean) ?? {};\n  const low = first.lowPrice ?? first.price;\n  const high = first.highPrice ?? first.price;\n  return {\n    priceCents: parsePriceCents(low),\n    highCents: parsePriceCents(high),\n    currency: first.priceCurrency ?? 'EUR',\n    availability: mapAvailability(first.availability)\n  };\n}\n\nfunction slugFromUrl(url) {\n  try {\n    const p = new URL(url).pathname.replace(/\\/+$/, '');\n    return p.split('/').filter(Boolean).pop() ?? null;\n  } catch { return null; }\n}\n\nfunction extractProduct(html, url) {\n  const product = extractJsonLd(html).map(findProduct).find(Boolean);\n  if (!product) return null;\n  const offer = pickOffer(product);\n  const image = Array.isArray(product.image) ? product.image[0] : product.image;\n  const brand = typeof product.brand === 'object' ? product.brand?.name : product.brand;\n  const category = typeof product.category === 'object' ? product.category?.name : product.category;\n  const attributes = {};\n  if (offer.highCents && offer.highCents !== offer.priceCents) {\n    attributes.price_range = { low_cents: offer.priceCents, high_cents: offer.highCents };\n  }\n  return {\n    sku: product.sku ? String(product.sku).trim() : null,\n    slug: slugFromUrl(url),\n    name: stripTags(product.name ?? ''),\n    description: stripTags(product.description ?? ''),\n    price_cents: offer.priceCents,\n    currency: String(offer.currency || 'EUR').toUpperCase(),\n    availability: offer.availability,\n    category: category ? stripTags(category) : null,\n    brand: brand ? stripTags(brand) : null,\n    attributes,\n    image_url: typeof image === 'string' ? image : image?.url ?? null,\n    product_url: url\n  };\n}\n\nfunction normalizeProduct(raw, url) {\n  const p = { ...raw, product_url: raw.product_url ?? url };\n  if (!p.name) throw new Error('product without name');\n  if (!p.slug) p.slug = slugFromUrl(url);\n  if (!p.sku) p.sku = p.slug;\n  if (!p.sku) throw new Error('product without sku or slug');\n  const defaults = {\n    description: '',\n    price_cents: null,\n    currency: 'EUR',\n    availability: 'unknown',\n    category: null,\n    brand: null,\n    attributes: {},\n    image_url: null\n  };\n  for (const [key, value] of Object.entries(defaults)) {\n    if (p[key] == null) p[key] = value;\n  }\n  return p;\n}\n\nconst url = $('URLs').item.json.url;\nconst runId = $('Run starten').first().json.id;\nif ($json.error) return [{ json: { __error: $json.error?.message ?? String($json.error), url, run_id: runId } }];\nconst html = $json.data?.rawHtml ?? $json.rawHtml ?? $json.data?.html ?? '';\nconst raw = extractProduct(html, url);\nif (!raw) return [{ json: { __error: 'kein JSON-LD-Produkt', url, run_id: runId } }];\ntry { return [{ json: { ...normalizeProduct(raw, url), run_id: runId } }]; }\ncatch (e) { return [{ json: { __error: e.message, url, run_id: runId } }]; }\n",
+        "jsCode": "'use strict';\n\nconst ENTITIES = {\n  amp: '&', lt: '<', gt: '>', quot: '\"', apos: \"'\", nbsp: ' ',\n  auml: 'ä', ouml: 'ö', uuml: 'ü', szlig: 'ß',\n  Auml: 'Ä', Ouml: 'Ö', Uuml: 'Ü',\n  euro: '€', deg: '°', times: '×',\n  copy: '©', reg: '®', trade: '™',\n  mdash: '—', ndash: '–', hellip: '…'\n};\n\n// Ungültige Codepoints (z. B. > 0x10FFFF, Surrogate) lassen String.fromCodePoint\n// werfen bzw. erzeugen UTF-8, das Postgres jsonb ablehnt – Originaltext behalten.\nfunction safeCodePoint(n, original) {\n  if (Number.isInteger(n) && n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff)) {\n    return String.fromCodePoint(n);\n  }\n  return original;\n}\n\nfunction decodeEntities(s = '') {\n  return String(s)\n    .replace(/&#x([0-9a-f]+);/gi, (m, h) => safeCodePoint(parseInt(h, 16), m))\n    .replace(/&#(\\d+);/g, (m, d) => safeCodePoint(parseInt(d, 10), m))\n    .replace(/&([a-z][a-z0-9]*);/gi, (m, name) => ENTITIES[name] ?? m);\n}\n\nfunction stripTags(s = '') {\n  return decodeEntities(String(s).replace(/<[^>]*>/g, ' ')).replace(/\\s+/g, ' ').trim();\n}\n\nfunction parsePriceCents(value) {\n  if (value == null) return null;\n  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value * 100);\n  const raw = String(value).trim();\n  if (!raw) return null;\n  const cleaned = raw.replace(/[^\\d,.-]/g, '');\n  if (!cleaned) return null;\n  const lastDot = cleaned.lastIndexOf('.');\n  const lastComma = cleaned.lastIndexOf(',');\n  const lastSep = Math.max(lastDot, lastComma);\n  let normalized;\n  if (lastSep !== -1 && cleaned.length - lastSep - 1 >= 1 && cleaned.length - lastSep - 1 <= 2) {\n    const dec = cleaned[lastSep];\n    const other = dec === '.' ? ',' : '.';\n    const withoutOther = cleaned.split(other).join('');\n    const idx = withoutOther.lastIndexOf(dec);\n    normalized = withoutOther.slice(0, idx) + '.' + withoutOther.slice(idx + 1);\n  } else {\n    normalized = cleaned.replace(/[.,]/g, '');\n  }\n  if (!normalized) return null;\n  const n = Number(normalized);\n  return Number.isFinite(n) ? Math.round(n * 100) : null;\n}\n\nfunction mapAvailability(value) {\n  const v = String(value ?? '').toLowerCase();\n  if (!v) return 'unknown';\n  if (/(outofstock|out_of_stock|soldout|unavailable|not available|nicht verfügbar|ausverkauft)/.test(v)) return 'outofstock';\n  if (/(preorder|backorder|vorbestellung)/.test(v)) return 'preorder';\n  if (/(instock|in_stock|available|lieferbar|auf lager)/.test(v)) return 'instock';\n  return 'unknown';\n}\n\nfunction extractJsonLd(html) {\n  const out = [];\n  const re = /<script[^>]+type=[\"']application\\/ld\\+json[\"'][^>]*>([\\s\\S]*?)<\\/script>/gi;\n  let m;\n  while ((m = re.exec(html))) {\n    try {\n      const parsed = JSON.parse(m[1].trim());\n      if (Array.isArray(parsed)) out.push(...parsed);\n      else out.push(parsed);\n    } catch { /* malformed JSON-LD ignorieren */ }\n  }\n  return out;\n}\n\nfunction findProduct(node) {\n  if (!node || typeof node !== 'object') return null;\n  const type = node['@type'];\n  const types = Array.isArray(type) ? type : [type];\n  if (types.includes('Product')) return node;\n  for (const key of ['@graph', 'itemListElement', 'mainEntity']) {\n    const child = node[key];\n    if (Array.isArray(child)) {\n      for (const c of child) {\n        const found = findProduct(c?.item ?? c);\n        if (found) return found;\n      }\n    } else if (child) {\n      const found = findProduct(child);\n      if (found) return found;\n    }\n  }\n  return null;\n}\n\nfunction pickOffer(product) {\n  const offers = Array.isArray(product.offers) ? product.offers : [product.offers];\n  // Erstes Angebot MIT Preis nehmen – Offer-Arrays können vorab nur\n  // availability-Einträge enthalten. Die Verfügbarkeit ggf. separat aus dem\n  // ersten Angebot mit availability-Feld übernehmen.\n  const priced = offers.find((o) => o && (o.price != null || o.lowPrice != null));\n  const first = priced ?? offers.find(Boolean) ?? {};\n  const withAvailability = offers.find((o) => o && o.availability != null) ?? first;\n  const low = first.lowPrice ?? first.price;\n  const high = first.highPrice ?? first.price;\n  return {\n    priceCents: parsePriceCents(low),\n    highCents: parsePriceCents(high),\n    currency: first.priceCurrency ?? 'EUR',\n    availability: mapAvailability(withAvailability.availability)\n  };\n}\n\nfunction slugFromUrl(url) {\n  try {\n    const p = new URL(url).pathname.replace(/\\/+$/, '');\n    return p.split('/').filter(Boolean).pop() ?? null;\n  } catch { return null; }\n}\n\n// Relative Bild-URLs (häufig \"/img/x.jpg\") gegen die Seiten-URL auflösen.\nfunction resolveUrl(value, base) {\n  const raw = typeof value === 'string' ? value : value?.url;\n  if (typeof raw !== 'string' || !raw) return null;\n  try {\n    return new URL(raw, base).href;\n  } catch {\n    return raw;\n  }\n}\n\nfunction extractProduct(html, url) {\n  const product = extractJsonLd(html).map(findProduct).find(Boolean);\n  if (!product) return null;\n  const offer = pickOffer(product);\n  const image = Array.isArray(product.image) ? product.image[0] : product.image;\n  const brand = typeof product.brand === 'object' ? product.brand?.name : product.brand;\n  const category = typeof product.category === 'object' ? product.category?.name : product.category;\n  const attributes = {};\n  if (offer.highCents && offer.highCents !== offer.priceCents) {\n    attributes.price_range = { low_cents: offer.priceCents, high_cents: offer.highCents };\n  }\n  return {\n    sku: product.sku ? String(product.sku).trim() : null,\n    slug: slugFromUrl(url),\n    name: stripTags(product.name ?? ''),\n    description: stripTags(product.description ?? ''),\n    price_cents: offer.priceCents,\n    currency: String(offer.currency || 'EUR').toUpperCase(),\n    availability: offer.availability,\n    category: category ? stripTags(category) : null,\n    brand: brand ? stripTags(brand) : null,\n    attributes,\n    image_url: resolveUrl(image, url),\n    product_url: url\n  };\n}\n\nfunction normalizeProduct(raw, url) {\n  const p = { ...raw, product_url: raw.product_url ?? url };\n  if (!p.name) throw new Error('product without name');\n  if (!p.slug) p.slug = slugFromUrl(url);\n  if (!p.sku) p.sku = p.slug;\n  if (!p.sku) throw new Error('product without sku or slug');\n  const defaults = {\n    description: '',\n    price_cents: null,\n    currency: 'EUR',\n    availability: 'unknown',\n    category: null,\n    brand: null,\n    attributes: {},\n    image_url: null\n  };\n  for (const [key, value] of Object.entries(defaults)) {\n    if (p[key] == null) p[key] = value;\n  }\n  return p;\n}\n\nconst url = $('Batch: Produkt-URLs').item.json.url;\nconst runId = $('Run starten').first().json.id;\nif ($json.error) return [{ json: { __error: $json.error?.message ?? String($json.error), url, run_id: runId } }];\nconst html = $json.data?.rawHtml ?? $json.rawHtml ?? $json.data?.html ?? '';\nlet raw;\ntry { raw = extractProduct(html, url); }\ncatch (e) { return [{ json: { __error: e.message, url, run_id: runId } }]; }\nif (!raw) return [{ json: { __error: 'kein JSON-LD-Produkt', url, run_id: runId } }];\ntry { return [{ json: { ...normalizeProduct(raw, url), run_id: runId } }]; }\ncatch (e) { return [{ json: { __error: e.message, url, run_id: runId } }]; }\n",
         "mode": "runOnceForEachItem"
       },
       "id": "crawl-extract",
-      "name": "Extrahieren",
+      "name": "Produkt aus JSON-LD extrahieren",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1320,
-        180
+        360
       ]
     },
     {
@@ -157,7 +218,7 @@
       "typeVersion": 2.2,
       "position": [
         1540,
-        180
+        360
       ]
     },
     {
@@ -175,7 +236,7 @@
       "typeVersion": 2.8,
       "position": [
         1760,
-        80
+        260
       ],
       "credentials": {
         "postgres": {
@@ -193,18 +254,33 @@
         }
       },
       "id": "crawl-upsert-product",
-      "name": "Upsert",
+      "name": "Produkt upserten",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
       "position": [
         1760,
-        280
+        460
       ],
+      "onError": "continueErrorOutput",
       "credentials": {
         "postgres": {
           "name": "ShopAgent DB"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "let url = null;\ntry { url = $('Batch: Produkt-URLs').item.json.url ?? null; } catch { url = null; }\nconst runId = $('Run starten').first().json.id;\nconst err = $json.error ?? $json;\nconst msg = err?.message ?? (typeof err === 'string' ? err : 'Upsert fehlgeschlagen');\nreturn [{ json: { __error: String(msg), url, run_id: runId } }];",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "crawl-upsert-error",
+      "name": "Upsert-Fehler formen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        460
+      ]
     },
     {
       "parameters": {
@@ -239,7 +315,7 @@
         "options": {}
       },
       "id": "crawl-firecrawl-page",
-      "name": "Firecrawl Seite",
+      "name": "Firecrawl: Info-Seite",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -329,7 +405,7 @@
         }
       },
       "id": "crawl-upsert-page",
-      "name": "Seite upsert",
+      "name": "Info-Seite upserten",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
       "position": [
@@ -348,7 +424,7 @@
         "mode": "runOnceForAllItems"
       },
       "id": "crawl-continue",
-      "name": "Weiter",
+      "name": "Seitenzweig abschließen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -386,7 +462,7 @@
         "operation": "executeQuery",
         "query": "update crawl_runs c set\n  finished_at = now(),\n  status = case when jsonb_array_length(c.errors) = 0 then 'success' else 'partial' end,\n  urls_total = $2,\n  urls_fetched = (select count(*) from products p where p.last_seen_at >= c.started_at)\n                 + jsonb_array_length(c.errors),\n  products_upserted = (select count(*) from products p where p.last_seen_at >= c.started_at),\n  products_deactivated = (select count(*) from products p where not p.is_active and p.updated_at >= c.started_at)\nwhere c.id = $1;",
         "options": {
-          "queryReplacement": "={{ [$('Run starten').first().json.id, $('URLs parsen').all().length] }}"
+          "queryReplacement": "={{ [$('Run starten').first().json.id, $('URLs parsen').all().length + $('Info-URLs').all().length] }}"
         }
       },
       "id": "crawl-run-finish",
@@ -442,14 +518,14 @@
       "main": [
         [
           {
-            "node": "URLs",
+            "node": "Batch: Produkt-URLs",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "URLs": {
+    "Batch: Produkt-URLs": {
       "main": [
         [
           {
@@ -460,25 +536,25 @@
         ],
         [
           {
-            "node": "Firecrawl scrape",
+            "node": "Firecrawl: Produktseite",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Firecrawl scrape": {
+    "Firecrawl: Produktseite": {
       "main": [
         [
           {
-            "node": "Extrahieren",
+            "node": "Produkt aus JSON-LD extrahieren",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extrahieren": {
+    "Produkt aus JSON-LD extrahieren": {
       "main": [
         [
           {
@@ -500,7 +576,7 @@
         ],
         [
           {
-            "node": "Upsert",
+            "node": "Produkt upserten",
             "type": "main",
             "index": 0
           }
@@ -511,18 +587,36 @@
       "main": [
         [
           {
-            "node": "URLs",
+            "node": "Batch: Produkt-URLs",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Upsert": {
+    "Produkt upserten": {
       "main": [
         [
           {
-            "node": "URLs",
+            "node": "Batch: Produkt-URLs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert-Fehler formen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert-Fehler formen": {
+      "main": [
+        [
+          {
+            "node": "Fehler loggen",
             "type": "main",
             "index": 0
           }
@@ -533,14 +627,14 @@
       "main": [
         [
           {
-            "node": "Firecrawl Seite",
+            "node": "Firecrawl: Info-Seite",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Firecrawl Seite": {
+    "Firecrawl: Info-Seite": {
       "main": [
         [
           {
@@ -573,7 +667,7 @@
         ],
         [
           {
-            "node": "Seite upsert",
+            "node": "Info-Seite upserten",
             "type": "main",
             "index": 0
           }
@@ -584,25 +678,25 @@
       "main": [
         [
           {
-            "node": "Weiter",
+            "node": "Seitenzweig abschließen",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Seite upsert": {
+    "Info-Seite upserten": {
       "main": [
         [
           {
-            "node": "Weiter",
+            "node": "Seitenzweig abschließen",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Weiter": {
+    "Seitenzweig abschließen": {
       "main": [
         [
           {
@@ -632,10 +726,15 @@
   },
   "active": false,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
   },
   "pinData": {},
   "meta": {
     "templateCredsSetupCompleted": false
-  }
+  },
+  "tags": [
+    "shopagent",
+    "crawl"
+  ]
 }

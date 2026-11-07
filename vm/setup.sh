@@ -15,7 +15,8 @@ fail() { printf '[setup] FEHLER: %s\n' "$*" >&2; exit 1; }
 log "Pakete installieren"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl git
+apt-get install -y --no-install-recommends ca-certificates curl git postgresql-client qemu-guest-agent
+systemctl enable --now qemu-guest-agent >/dev/null 2>&1 || true
 
 if ! command -v docker >/dev/null 2>&1; then
   log "Docker installieren"
@@ -62,6 +63,7 @@ if [[ ! -f "$ROOT/firecrawl/.env" ]]; then
 fi
 BULL_KEY="$(sed -n 's/^FIRECRAWL_BULL_AUTH_KEY=//p' "$ROOT/.env" | head -1 | sed -e "s/^'//" -e "s/'$//")"
 [[ -n "$BULL_KEY" ]] || fail "FIRECRAWL_BULL_AUTH_KEY fehlt in .env"
+[[ "$BULL_KEY" =~ ^[A-Za-z0-9_-]+$ ]] || fail "FIRECRAWL_BULL_AUTH_KEY enthält Sonderzeichen – bitte nur A-Z, a-z, 0-9, _ und - verwenden."
 sed -i "s|^BULL_AUTH_KEY=.*|BULL_AUTH_KEY=$BULL_KEY|" "$ROOT/firecrawl/.env"
 chmod 600 "$ROOT/firecrawl/.env"
 
